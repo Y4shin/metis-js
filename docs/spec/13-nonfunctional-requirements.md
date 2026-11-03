@@ -8,28 +8,28 @@
 - SEC-002: **The daemon MUST refuse a bundle whose signature chain it does not
   trust, and MUST treat the refusal as a start-up failure rather than a
   workaround.** `[current]`
-- SEC-003: **The daemon MUST validate a bundle's archive before writing
-  anything, under the archive rules in `BND-024` to `BND-033`.** `[current]`
+- SEC-003: **The daemon MUST validate a bundle's contents before making any of
+  them available, under the rules in `BND-024` to `BND-033`.** `[current]`
 - SEC-004: **Untrusted bundle bytes MUST be parsed with strict, canonical-input
   decoders, so a second encoding of the same value cannot be used to make one
   signature verify under two keys.** `[current]`
-- SEC-005: **The daemon MUST recompute every key identifier it compares and MUST
-  NOT trust a carried identifier.** `[current]`
+- SEC-005: **The daemon MUST recompute every identifier it compares and MUST NOT
+  trust a carried one.** `[current]`
 - SEC-006: **The compiled-in trust store MUST be empty; no shipped build may
-  trust a test key or an arbitrary third-party root.** `[current]`
-- SEC-007: **A native plugin MUST be treated as code with the daemon's privileges;
-  the application MUST NOT claim that the ABI isolates or sandboxes it.**
+  trust a test key or an arbitrary third-party signer.** `[current]`
+- SEC-007: **A plugin MUST be treated as code with the daemon's privileges; the
+  application MUST NOT claim that the boundary isolates or sandboxes it.**
   `[current]`
 - SEC-008: **The daemon MUST NOT write a token, a preshared key, or any other
-  plaintext secret to persistent state, logs, or URLs (see `AUT-014`).**
+  plaintext secret to persistent state, logs, or a call's address (see `AUT-014`).**
   `[current]`
 - SEC-009: **A secret file MUST be refused unless only its owner can read it.**
   `[current]`
-- SEC-010: **A keychain that exists but refuses MUST NOT cause a silent fallback
+- SEC-010: **An available credential store that refuses MUST NOT cause a silent fallback
   to a less protected storage backend.** `[current]`
 - SEC-011: **The host context delivered to a plugin MUST NOT contain secrets.**
   `[current]`
-- SEC-012: **Forwarded headers MUST NOT be used for authorization.**
+- SEC-012: **Information a proxy forwards MUST NOT be used for authorization.**
   `[current]`
 - SEC-013: **The daemon MUST warn when it exposes a plaintext remote listener
   outside loopback without a named trusted proxy, and when a secret-bearing
@@ -41,6 +41,7 @@
 
 - PRV-001: **Conversation and task data MUST be stored under the operator's
   control, in the daemon's state store.** `[planned, form open]`
+- PRV-002: Retired. This identifier is not reused.
 - PRV-003: **Under the tool disclosure proposal, a model provider's own transport
   history would not become the canonical conversation history.** This is proposal
   material and not an accepted requirement. `[proposed]`
@@ -59,11 +60,11 @@
 - REL-002: **A disable-class plugin failure MUST leave the daemon running, and a
   trust failure MUST stop start-up rather than allow untrusted code to run.**
   `[current]`
-- REL-003: **No library is unmapped while plugin code, a future, a waker
-  clone, or a callback can still reference it.** `[current]`
+- REL-003: **Plugin code MUST NOT be released while it, a pending result, a
+  completion signal, or a callback can still reference it.** `[current]`
 - REL-004: **Shutdown MUST be bounded by a deadline, MUST report instances it
-  could not release, and MUST leave those libraries mapped rather than force an
-  unsafe unload.** `[current]`
+  could not release, and MUST leave that plugin code resident rather than force
+  an unsafe release.** `[current]`
 - REL-005: **A consumer that falls behind the event window MUST receive a
   terminal refusal rather than a silent gap.** `[current]`
 - REL-006: **A daemon restart MUST expire cursors and in-flight cancellation
@@ -94,9 +95,9 @@
 
 ## 13.5 Compatibility
 
-- CMP-001: **The plugin ABI MUST remain compatible within a major version by
-  append-only table growth, and an older minor MUST be refused while a newer
-  minor is tolerated.** `[current]`
+- CMP-001: **The plugin contract MUST stay compatible within a major version by
+  adding operations only, and an older minor MUST be refused while a newer minor
+  is tolerated.** `[current]`
 - CMP-002: **The bundle container version MUST match the host's exactly; an
   unknown version MUST be refused and degrade that bundle.** `[current]`
 - CMP-003: **The plugin's own version MUST NOT gate loading (see `PLG-017`).**
@@ -104,9 +105,9 @@
 - CMP-004: **An unintentional breaking contract change MUST be detectable and
   treated as a defect; a deliberate breaking change is introduced as a new version
   or a documented migration.** `[current]`
-- CMP-005: **The externally documented setting names, default paths, ABI names,
-  bundle bytes, and manifest fields MUST be preserved or migrated deliberately.**
-  Network metadata spellings are the current realization (`12.3`). `[current]`
+- CMP-005: **The externally documented settings, default locations, contract
+  version, bundle and manifest declarations, and network protocol version MUST be
+  preserved or migrated deliberately.** `[current]`
 - CMP-006: **Existing paired surfaces MUST keep working across an upgrade, or
   their stored credentials MUST be migrated deliberately (see `AUT-040`).**
   `[current]`
@@ -127,13 +128,14 @@
 ## 13.7 Dependency and footprint constraints
 
 - NFR-001: **The plugin runtime SHOULD keep its dependency footprint small,
-  because it needs only the contract plus the archive, manifest, and signature
-  readers the bundle requires.** Disregarding this recommendation increases
-  attack surface and build cost in the process that parses untrusted bytes.
-  `[current]`
+  because it needs only the contract plus the readers for the bundle, the
+  manifest, and the signature.** Disregarding this recommendation increases
+  attack surface and build cost in the process that parses untrusted bytes. The
+  dependency set is open (`OQ-121`). `[current]`
 - NFR-002: **The code path that reads untrusted bundle bytes SHOULD avoid adding
-  a compiled native dependency, so a build step is not required to read untrusted
-  input.** Disregarding this recommendation adds a compiled dependency to the
-  process that parses untrusted bytes. `[current]`
+  a dependency that must be compiled for the target machine, so reading untrusted
+  input needs no build step on that machine.** Disregarding this recommendation
+  adds a build requirement to the process that parses untrusted bytes.
+  `[current]`
 - NFR-003: **The SDK's serialisation, scheduling, and export helpers MUST stay out
   of the runtime's dependency footprint (see `SDK-002`).** `[planned]`

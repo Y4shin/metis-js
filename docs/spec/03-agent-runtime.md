@@ -102,7 +102,7 @@ interface. Concrete model providers and tools arrive through the consumer.
   reported as saved.** `[planned]`
 - SES-008: **The exact-reconstruction invariant applies to session state only; it
   does not require replaying external tool side effects or reproducing
-  process-local handles and executors.** `[planned]`
+  process-local handles.** `[planned]`
 - SES-009: **The runtime MUST own session types, persistence-event semantics, and
   reconstruction logic; the consumer MUST own the storage backend and its
   implementation.** `[planned]`
@@ -113,6 +113,7 @@ interface. Concrete model providers and tools arrive through the consumer.
 
 - CNV-009: **The agent runtime MUST be usable by an embedding application other
   than the daemon.** `[planned]`
+- CNV-010: Retired. This identifier is not reused.
 - CNV-011: **The runtime MUST NOT assume that persisting session state makes a
   workflow safe to resume or prevents repeating external writes.**
   `[planned]`

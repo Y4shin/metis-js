@@ -27,6 +27,11 @@ The keywords are used as follows:
 This specification does not use **SHALL**, **REQUIRED**, **RECOMMENDED**, or
 similar synonyms as additional requirement levels.
 
+A requirement that names a compatibility axis (`CMP-001` to `CMP-006`) states
+the rule the axis follows, not the concrete version numbers or spellings that
+realize it. Those are decisions of an implementation, opened as questions in
+`15-open-questions.md`.
+
 ## Document conventions
 
 ### Requirement identifiers
@@ -71,7 +76,7 @@ and record that choice as a decision.
 | `06-daemon-and-api.md` | Daemon responsibilities, the API contract, client, transports, configuration, and secrets. |
 | `07-identity-authentication-and-pairing.md` | Surface identity, local access control, tokens, pairing, and credential storage. |
 | `08-realtime-events-and-cancellation.md` | Event streams, snapshots, cursors, ordering, slow consumers, and cancellation. |
-| `09-plugins.md` | Plugin ABI, bundles and signing, manifests, host lifecycle, start-up policy, SDK, and CLI. |
+| `09-plugins.md` | Plugin contract, bundles and signing, manifests, host lifecycle, start-up policy, SDK, and CLI. |
 | `10-surfaces-and-terminal.md` | Desktop and Android shells, and the terminal CLI and TUI. |
 | `11-business-rules-and-invariants.md` | Cross-cutting invariants and state transitions. |
 | `12-external-interfaces.md` | Externally observable configuration, transports, and compatibility contracts. |
@@ -79,19 +84,26 @@ and record that choice as a decision.
 | `14-acceptance-criteria.md` | Acceptance criteria and relevant edge cases. |
 | `15-open-questions.md` | Unresolved questions and deferred decisions. |
 
-## Provenance
+## Provenance and implementation independence
 
-This specification was derived from the documentation of an implementation
-repository and reviewed through four independent rubric passes: source coverage
-and traceability, fidelity and normative language, implementation independence
-and scope, and clarity, consistency, and verifiability. The source inventory,
-traceability record, and review reports remain with the source repository. They
-are provenance for the specification, not inputs an implementation needs.
+This specification is self-contained. It was reviewed through four independent
+rubric passes: coverage and traceability, fidelity and normative language,
+implementation independence and scope, and clarity, consistency, and
+verifiability. No external repository is an input to an implementation.
+
+The specification names no programming language, framework, library, wire
+protocol, archive or container format, signature algorithm, or file-name
+spelling. Where a behavior needs a concrete realization, the requirement states
+the observable rule and `15-open-questions.md` asks the question the
+realization must answer. An implementation chooses an answer and records it as
+a decision; a different implementation can choose differently provided it
+preserves the stated behavior.
 
 ## Requirement index
 
 | Group | Domain | Document |
 | --- | --- | --- |
+| `PRD` | Product scope, goals, non-goals, and constraints | `01-purpose-scope-and-conventions.md` |
 | `AGT` | Agent contexts | `03-agent-runtime.md` |
 | `CNV` | Agent loop and conversations | `03-agent-runtime.md` |
 | `TSK` | Agent tasks | `03-agent-runtime.md` |
@@ -106,7 +118,7 @@ are provenance for the specification, not inputs an implementation needs.
 | `AUT` | Access control, tokens, and pairing | `07-identity-authentication-and-pairing.md` |
 | `RTS` | Realtime event streams | `08-realtime-events-and-cancellation.md` |
 | `CAN` | Cancellation | `08-realtime-events-and-cancellation.md` |
-| `PLG` | Plugin contract and ABI | `09-plugins.md` |
+| `PLG` | Plugin contract | `09-plugins.md` |
 | `BND` | Bundles and signing | `09-plugins.md` |
 | `MAN` | Manifest | `09-plugins.md` |
 | `HST` | Plugin host lifecycle | `09-plugins.md` |

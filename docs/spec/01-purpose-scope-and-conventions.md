@@ -32,19 +32,19 @@ deliberately simple harness.
 
 - PRD-N1: Metis is not a chat-channel product. Chat channels are not planned.
 - PRD-N2: Metis does not plan an iOS application.
-- PRD-N3: Metis is not a sandbox. A native plugin runs inside the daemon process
+- PRD-N3: Metis is not a sandbox. A plugin runs inside the daemon process
   and can crash or hang it.
-- PRD-N4: Metis does not plan hot unloading, meaning replacing a loaded plugin
-  library while the daemon runs.
+- PRD-N4: Metis does not plan hot replacement, meaning replacing a running
+  plugin's code while the daemon runs.
 - PRD-N5: Metis does not host a daemon locally on Android. Android reaches a
   daemon over the network transport.
 - PRD-N6: Metis does not plan a standalone browser client. A browser client would
   require a network endpoint or gateway, and the packaged applications use a
-  native client.
+  platform client.
 - PRD-N7: Multiple declared agents do not imply autonomous delegation or
   inter-agent messaging.
-- PRD-N8: The plugin ABI is not a security boundary. It does not claim to make a
-  plugin safe to run.
+- PRD-N8: The plugin boundary is not a security boundary. It does not claim to
+  make a plugin safe to run.
 
 ## 1.4 Actors
 
@@ -56,7 +56,7 @@ deliberately simple harness.
 | Agent context | The declared prompt and permission boundary an execution belongs to. |
 | Daemon | The long-lived process that hosts sessions, tasks, workflows, plugins, and the API. |
 | Plugin author | A person who writes a plugin and packages it as a signed bundle. |
-| Plugin | A native add-on that supplies capabilities to the daemon. |
+| Plugin | An add-on that supplies capabilities to the daemon. |
 | Workflow author | A person who defines a workflow graph and its scripts. |
 | Reviewer | A person or coding agent who builds or evaluates a Metis implementation from this specification. |
 
@@ -71,8 +71,8 @@ The finished application comprises:
   state, lifecycle events, cancellation, and execution limits;
 - a workflow runtime with explicit directed acyclic graphs, three step types,
   script routing, joins, and declared tool dependencies;
-- a plugin system with a versioned native ABI, signed bundles, manifests, a host
-  runtime, start-up and teardown policy, and a plugin authoring SDK, core
+- a plugin system with a versioned plugin contract, signed bundles, manifests, a
+  host runtime, start-up and teardown policy, and a plugin authoring SDK, core
   plugins, and a CLI;
 - a terminal application with CLI commands and an interactive TUI;
 - a desktop application and an Android application sharing one frontend, both
@@ -88,14 +88,15 @@ The finished application comprises:
   built-in.** `[current]`
 - PRD-C3: **Every execution that can call a tool MUST belong to a declared agent
   context.** `[planned]`
+- PRD-C4: Retired. This identifier is not reused.
 - PRD-C5: **A plugin MUST be installable as one signed file placed in the plugin
   directory.** Installation MUST NOT require a build step on the target machine.
   `[current]`
 - PRD-C6: **Remote access MUST be off unless the operator explicitly enables
   it.** `[current]`
-- PRD-C7: **The daemon MUST NOT terminate TLS itself. When remote access is
-  exposed beyond a trusted network, a reverse proxy terminates TLS in front of the
-  daemon.** `[current]`
+- PRD-C7: **The daemon MUST NOT terminate encryption for the remote listener.
+  When remote access is exposed beyond a trusted network, a reverse proxy
+  terminates encryption in front of the daemon.** `[current]`
 
 ## 1.7 Status and evidence caveat
 
@@ -107,7 +108,7 @@ and is still subject to the rule that existing behavior is not automatically
 intended behavior.
 
 The plugin host and the network, transport, identity, pairing, and realtime
-foundations are specified as current behavior. The Windows named-pipe transport
+foundations are specified as current behavior. The Windows local transport
 is compile-verified and has never executed; every Windows behavior is therefore
 stated from design evidence and marked accordingly in the acceptance and
 open-question records.

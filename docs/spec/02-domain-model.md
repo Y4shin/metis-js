@@ -91,8 +91,9 @@ exist:
 
 - **Agentic task step**: A bounded model-driven task with explicit input and
   output.
-- **Script step** (currently Lua): Runtime-provided script execution with
-  explicitly declared tool dependencies drawn from the enclosing agent context.
+- **Script step**: Runtime-provided script execution in a restricted embedded
+  language, with explicitly declared tool dependencies drawn from the enclosing
+  agent context. The language is open (`OQ-027`).
 - **Fan-in script step** (join): A script step with multiple declared input
   ports and no tool access. It combines inputs after its ports resolve.
 
@@ -124,11 +125,11 @@ Plugin-based customization is how Metis stays minimal: the core is small, and
 optional complexity is added through plugins. A plugin supplies tools through
 capabilities; it does not export workflow steps.
 
-**Capability** (settled): One named thing a plugin offers, qualified as
-`<instance>.<tool>` at the host boundary, carrying a kind, a version, and request
-and response schemas. A plugin advertises its capabilities before it serves
-anything, and the host refuses a call to one the plugin does not declare.
-Capability kinds in the current contract are `tool` and `provider`. A kind a host
+**Capability** (settled): One named thing a plugin offers, qualified by its
+instance at the host boundary, carrying a kind, a version, and request and
+response schemas. A plugin advertises its capabilities before it serves anything,
+and the host refuses a call to one the plugin does not declare. The qualification
+format is open (`OQ-104`). The documented capability kinds are tool and provider. A kind a host
 build does not know refuses that one capability and leaves the rest of the plugin
 usable.
 
@@ -136,27 +137,29 @@ usable.
 several instances. An instance is identified by the name its configuration was
 resolved under.
 
-**Bundle** (settled): The one file a plugin is installed as: a `.metis` archive
-holding the manifest and one library per target, inside a signed and versioned
-container. Signing covers everything a user installs, so there is no second
-artifact to keep in step.
+**Bundle** (settled): The one file a plugin is installed as. It carries the
+plugin's manifest and the plugin's code for each platform the plugin supports,
+inside one signed, versioned container. Signing covers everything a user
+installs, so there is no second artifact to keep in step. The container and
+archive formats are open (`OQ-107`).
 
-**Manifest** (settled): The plain-text file at a bundle's root. It declares the
-plugin's identity and version, the ABI major and the minimum minor it needs, its
-library path per target, its capabilities with their schemas, and its
+**Manifest** (settled): The structured declaration at a bundle's root. It
+declares the plugin's identity and version, the compatibility it demands, its
+code for each platform, its capabilities with their schemas, and its
 configuration schema. It is written by hand or generated from the same source as
-the plugin's own declaration, and the host cross-checks the two.
+the plugin's own declaration, and the host cross-checks the two. The manifest's
+format and field names are open (`OQ-109`).
 
-**Target** (settled): An operating-system and architecture pair, spelled
-`<os>-<arch>`, such as `linux-x86_64`. A bundle carries one library per target it
-supports, and the host loads the one that matches it.
+**Platform target** (settled): One operating-system and architecture pair a
+bundle carries code for, such as a Linux x86-64 desktop. A bundle may carry
+several targets, and a host loads only the one that matches it. The spelling of
+a target and the file layout inside a bundle are open (`OQ-107`).
 
 **Host context** (settled): What the host tells a plugin about itself when it
-initialises it, delivered in the same payload as the plugin's configuration. It
-names the instance by the identity the host resolved that configuration under,
-and it is permissive so a host may add a field. The current fields are the
-instance name, an optional data directory, and the highest capability descriptor
-version the host serves.
+initialises it, delivered with the plugin's configuration. It names the instance
+by the identity the host resolved that configuration under, and it is permissive
+so a host may add a field. Its fields are the instance name, an optional data
+directory, and the highest capability-descriptor version the host serves.
 
 **Disabled plugin** (settled): A plugin the host refused to start. It is still
 listed with its name, the reason, and its capabilities when a manifest was
@@ -170,16 +173,18 @@ does not block, and a host with no sink is legal.
 
 **Ordering ledger** (settled): The host's ordered record of the lifecycle steps it
 took for an instance, from load through call, cancellation, and teardown. It is
-what makes unloading safe to check: an instance is unloaded only when nothing is
-inside plugin code.
+what makes release safe to check: plugin code is released only when no call,
+pending result, or callback can still run in it.
 
 **Service request** (settled): A plugin's request for a host facility, currently a
 timer and later I/O readiness. The plugin awaits the host's answer with the same
-request identifier rather than blocking or spawning a thread.
+request identifier rather than blocking.
 
-**Future** (settled): A plugin's pending answer, represented as an opaque
-plugin-owned context plus a poll and drop interface. The host polls it and drops
-it.
+**Pending result** (settled): A plugin's not-yet-complete answer. The host owns
+the waiting side: it asks whether the answer is ready, receives either the answer,
+a pending indication, or a terminal status, and it receives completion signals
+that tell it to ask again. The concrete shape of this handshake is open
+(`OQ-104`).
 
 **Extension hook** (planned, undefined): A runtime extension point whose concrete
 form is undecided (`OQ-040`). It is not a defined interface in this
@@ -190,13 +195,14 @@ in-flight calls, and the key for cancellation, progress, and service requests.
 It is distinct from the client-side request identifier used for correlation and
 cancellation of daemon work.
 
-**Payload envelope**: One header byte in front of every plugin payload. The low
-four bits carry the payload format version, one bit carries the codec, and three
-bits are reserved and are zero.
+**Payload format version**: The version every plugin payload declares. The host
+refuses a version it does not know as unsupported. The encoding behind the version
+is open (`OQ-106`).
 
-**Trust store**: The root keys and key revocations the host uses to decide whether
-a bundle's signature is trusted. The runtime never reads daemon configuration;
-the daemon supplies the trust store.
+**Trust store**: The set of trusted signing identities and their revocations the
+host uses to decide whether a bundle is trusted. The runtime never reads daemon
+configuration; the daemon supplies the trust store. Its representation is open
+(`OQ-019`, `OQ-108`).
 
 ## 2.5 Tool discovery
 
@@ -225,10 +231,10 @@ version, surface name, and client version. It supports logging and version
 negotiation. It is not authentication and grants nothing.
 
 **Local access control**: The operating system's access control on the local
-transport endpoint. On Unix-like systems the daemon owns the socket and its
-directory as the daemon's user with a configured group and restricted mode. On
-Windows the pipe carries a security descriptor for the daemon's account and Local
-System and rejects remote clients. A local caller needs no credential.
+transport endpoint. The daemon owns the endpoint and restricts it to its own user,
+with a configured group where the platform supports one, and refuses remote and
+other-account callers. A local caller needs no credential. The concrete local
+transport and its access rule are open (`OQ-114`).
 
 **Pairing**: The one-time process by which a surface obtains its own credential
 from the daemon. Pairing presents a preshared key in the request body and returns
@@ -247,15 +253,17 @@ revocation.
 **Revocation**: The act of stopping one surface's credential. An operator can
 revoke one surface without affecting another, with effect no later than
 the next daemon start (`AUT-030`). How revocation is performed is not fixed; the
-current implementation deletes a stored token row.
+current implementation deletes the stored credential record.
 
 ## 2.7 Realtime and cancellation
 
-**Event stream**: A server-streaming API operation that delivers events to a
+**Event stream**: A long-lived API operation that delivers events to a
 client. A stream selects one or more channels and may carry a cursor.
 
-**Channel**: An event topic selected by a stream. The documented channel names
-are `daemon`, `session:<id>`, `task:<id>`, and `workflow_run:<id>`.
+**Channel**: An event topic selected by a stream. One channel carries
+ daemon-wide events, one carries a session's events, one a task's events, and one
+a workflow run's events. The channel names and their spelling are open
+(`OQ-119`).
 
 **Event**: One delivery carrying a daemon-wide monotonic identifier, a kind, a
 channel, and a payload. Kinds are unspecified, snapshot, heartbeat, and ordinary
@@ -269,10 +277,10 @@ channel holds an event, one empty snapshot message opens the stream.
 **Heartbeat**: An ordinary stream message that keeps an idle stream alive. It
 carries a kind of its own and the daemon's latest identifier.
 
-**Cursor**: The highest event identifier a client has processed, sent as
-`last_event_id` on a new stream so that the stream resumes after it. Zero means
-no cursor. The cursor is not a durable position: the daemon holds events only in
-a bounded in-memory window.
+**Cursor**: The highest event identifier a client has processed, sent with a new
+stream so that the stream resumes after it. Zero means no cursor. The cursor is
+not a durable position: the daemon holds events only in a bounded in-memory
+window. The request field that carries it is open (`OQ-119`).
 
 **Resync**: A fresh stream opened with no cursor, which begins with a snapshot.
 A client resyncs when it has no cursor or when the daemon refuses the cursor it
@@ -283,10 +291,10 @@ the daemon's bounded delivery window. The daemon ends that stream with a typed
 refusal instead of silently skipping events.
 
 **Request identifier (client-facing)**: An optional client-generated opaque
-identifier carried in request metadata, at most 64 printable ASCII characters
-with no space, used to correlate a call with its response and to name the work in
-a cancellation request. A call that declares none is not cancellable. The daemon
-echoes the identifier verbatim in response metadata.
+identifier carried with the call, at most 64 printable characters with no
+space, whose exact form is open (`OQ-123`), used to correlate a call with its
+answer and to name the work in a cancellation request. A call that declares none is not cancellable. The daemon
+echoes the identifier verbatim in the call's answer.
 
 **Cancellation**: An explicit idempotent request that stops the work one client
 request started. A dropped stream cancels nothing by itself.
@@ -315,7 +323,7 @@ Workflow (DAG)
 
 Plugin
   ships as .......... one signed bundle
-  contains .......... manifest + one library per target
+  contains .......... manifest + code for each supported platform
   advertises ........ capabilities
   adapted into ...... tools, model providers, hooks
 
@@ -328,18 +336,18 @@ Surface -> shared client -> daemon API -> daemon -> agent runtime, workflows, pl
 
 ```text
 bundle on disk
-  -> verified (signature and chain trusted)
-  -> extracted (archive staged for this host's target)
-  -> manifest validated (identity, ABI demand, target library)
-  -> library loaded and ABI checked
+  -> verified (signature trusted)
+  -> unpacked (manifest and this host's code made available)
+  -> manifest validated (identity, compatibility demand, code for this platform)
+  -> plugin code loaded and boundary contract checked
   -> initialised with configuration and host context
   -> registered (capabilities routable)
   -> serving calls
   -> disabled (registry state only; in-flight calls continue)
   -> enabled (accepts calls again)
-  -> shutdown (futures dropped, plugin quiesced)
+  -> shutdown (pending results dropped, plugin quiesced)
   -> instance destroyed
-  -> library unloaded (only when nothing is inside plugin code)
+  -> plugin code released (only when nothing is inside it)
 ```
 
 Failure outcomes are defined in `09-plugins.md` and `11-business-rules-and-invariants.md`.

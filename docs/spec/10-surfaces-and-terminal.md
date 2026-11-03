@@ -6,9 +6,10 @@
   that share one application frontend.** `[planned]`
 - SUR-002: **The application MUST NOT expose or depend on a local network service
   to serve its own user interface.** `[planned]`
+- SUR-003: Retired. This identifier is not reused.
 - SUR-004: **Both shells MUST reach the daemon only through the shared
   user-interface-independent client and the daemon API.** `[planned]`
-- SUR-005: **The native application layer MUST be the only component that talks
+- SUR-005: **The platform application layer MUST be the only component that talks
   to the daemon; the user-interface layer MUST NOT talk to the daemon directly.**
   `[planned]`
 - SUR-006: **The application MUST be a client of the persistent daemon and MUST
@@ -38,11 +39,11 @@
 
 ## 10.3 Android shell
 
-- SUR-015: **The Android application MUST integrate with the system assistant
-  through an assist activity that supports assistant activation.**
+- SUR-015: **The Android application MUST integrate with the platform's system
+  assistant in the way that platform requires for assistant activation.**
   `[planned, form open]`
 - SUR-016: **Where voice interaction requires it, the Android application MUST
-  provide the system's voice-interaction service and its sessions.**
+  provide the platform's voice-interaction integration and its sessions.**
   `[planned, form open]`
 - SUR-017: **The user MUST select Metis as their assistant for system-assistant
   activation to reach it; invocation gestures vary by device and configuration.**

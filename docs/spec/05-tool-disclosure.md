@@ -69,8 +69,8 @@ The proposal places the following rules on a disclosure request:
 
 The proposal states that tool schemas are supplied as structured request data,
 not by rewriting the system prompt or inserting schemas as system prose. A
-provider adapter may use native deferred-tool search only when it preserves the
-same semantics.
+provider adapter may use the provider's own deferred-tool search only when it
+preserves the same semantics.
 
 The proposal states that workflow script steps keep exact declared dependencies
 and do not use the disclosure oracle or unrestricted dynamic lookup.
@@ -101,8 +101,8 @@ of model-visible history; ordinary tool calls and user-visible text do not share
 a disclosure request; dispatch rejects a capability removed from the permission
 boundary after selection; save, drop, reload, and continue reproduce the exact
 ordered view; a missing or changed schema revision follows the declared policy;
-script steps still receive only their declared permitted tools; native and
-generic provider adapters behave equivalently; and attempt and schema budgets
+script steps still receive only their declared permitted tools; provider-specific
+and generic adapters behave equivalently; and attempt and schema budgets
 prevent loops and unbounded context growth.
 
 ## 5.5 Open decisions in the proposal

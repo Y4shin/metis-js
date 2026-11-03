@@ -40,7 +40,7 @@ as a decision; see `index.md` "Decisions not invented by this specification".
 - OQ-014: **What are the concrete model providers, how are models selected per
   execution, and how are provider credentials stored?**
 - OQ-015: **What are configuration precedence rules across files, environment
-  variables, command-line flags, and keychain or native stores?**
+  variables, command-line flags, and platform credential stores?**
 - OQ-016: **How do secrets reach plugins other than through the plugin's own
   configuration at initialisation?**
 - OQ-017: **What are session and task orchestration rules: lifecycle, scheduling,
@@ -55,9 +55,10 @@ as a decision; see `index.md` "Decisions not invented by this specification".
 - OQ-021: **What is the error taxonomy for plugin and daemon failures?** Three
   error types exist ahead of the decision; replacing them needs the operator's
   agreement.
-- OQ-022: **Should the API's JSON codec be enabled for outside clients, and what
-  does that mean for the authentication and error model?** This follows the
-  decision to use a binary-friendly protocol contract.
+- OQ-022: **What protocol and encoding does the daemon API use, and how are
+  calls, streaming, and refusals expressed in it?** The requirements in
+  `06-daemon-and-api.md` fix the observable behavior; this question fixes the
+  wire form that realizes it.
 
 ## 15.4 Workflows
 
@@ -95,8 +96,9 @@ as a decision; see `index.md` "Decisions not invented by this specification".
 - OQ-037: **How long are workflow definitions, run records, and outputs retained?**
 - OQ-038: **How does an agent task started inside a workflow relate to the
   daemon's client-facing cancellation request identifier?**
-- OQ-039: **What output schema representations are supported: a language-neutral
-  subset of JSON Schema, or a project-specific schema language?**
+- OQ-039: **What schema dialect represents workflow, task, and capability
+  payloads?** The specification fixes that a schema exists and is validated, not
+  the language it is written in (see also `OQ-110`).
 - OQ-040: **Which extension hooks does the agent runtime expose, and at which
   points in the loop?**
 
@@ -115,8 +117,8 @@ until the proposal is accepted.
 - OQ-045: Which ranking and reranking algorithms are used, and how are their
   indexes refreshed?
 - OQ-046: How long does an active tool view remain sticky across topic changes?
-- OQ-047: Which provider-specific equivalence tests must pass before native tool
-  search can replace the generic oracle path?
+- OQ-047: Which provider-specific equivalence tests must pass before a provider's
+  own tool search can replace the generic oracle path?
 - OQ-048: Do surfaces expose the active tool view or the operational oracle trace?
 - OQ-049: How are toolset members resolved when a member is unavailable, and what
   is the chosen failure policy?
@@ -135,28 +137,31 @@ until the proposal is accepted.
   footprint?**
 - OQ-056: **How are the SDK and CLI tested against the runtime without a full
   daemon?**
-- OQ-057: **Is the SDK a crate inside this repository, a separately published
-  crate, or both?**
-- OQ-058: **What are the plugin version, ABI version, and bundle version policies
-  as authors see them?**
+- OQ-057: **What is the SDK's authoring language, how is it distributed, and does
+  it live in this repository or separately?** `SDK-001` requires an SDK for the
+  language the core plugins are written in; it does not fix which language.
+- OQ-058: **What are the plugin version, boundary contract version, and bundle
+  version policies as authors see them?**
 - OQ-059: **Which parts of the revised authoring surface does a dependent effort
   re-export, and which does it hide?**
 - OQ-060: **Should the manifest's inline capability schemas remain inline, or be
   replaced by an identifier fetch?** The choice is provisional and cheap to
-  change because it does not move the ABI.
-- OQ-061: **Should a v1 bundle support assets or several files per target, and
-  what format extension would carry them?**
+  change because it does not move the boundary contract.
+- OQ-061: **Should a bundle support assets or several files per platform, and
+  what mechanism would carry them?**
 - OQ-062: **What are the exact cancel-race semantics and acknowledgement
   requirements for a plugin that misses its cancellation deadline?** The host
   records a protocol violation and drops; the plugin side is documented as an
   expectation, not a hard guarantee.
-- OQ-063: **Should the host add a daemon-side reaper thread for abandoned plugin
-  polls?** The reclaim is caller-driven today.
-- OQ-064: **What is the plugin host's `NotFound` rule for an identifier held by
+- OQ-063: **Should the host add its own reclaim pass for abandoned plugin result
+  queries?** The reclaim is caller-driven today.
+- OQ-064: **What is the plugin host's not-found rule for an identifier held by
   another instance, and where is it recorded in the contract text?** The
   implementation records it; the contract text owes a sentence.
-- OQ-065: **Should `RootKey` and `TrustStore` carry more validation, and how should
-  a malformed trust configuration behave?**
+- OQ-065: **What representation does the trust store use, and how should a
+  malformed trust configuration behave?** The daemon supplies trusted signing
+  identities and their revocations; the form is open (see also `OQ-019`,
+  `OQ-108`).
 
 ## 15.8 Realtime and access control
 
@@ -166,16 +171,16 @@ until the proposal is accepted.
 - OQ-067: **Are cursors per channel or daemon-wide?** They are daemon-wide today,
   so traffic on one channel can expire another channel's cursor.
 - OQ-068: **Do plugin-produced events get their own channels?**
-- OQ-069: **What are the snapshot contents per channel?** The channel names are
-  fixed; their snapshot payloads are not.
+- OQ-069: **What are the snapshot contents per channel?** A channel per target
+  area is required (`RTS-005`); the names and the snapshot payloads are not.
 - OQ-070: **What should a caller do about a transport failure after a stream
   ends?** Deliberate drops and cancellations are typed; transport failure
   handling is not specified.
 - OQ-071: **Should pairing have a rate limit or lockout?** None exists, and a
   network-reachable listener makes repeated guesses reachable.
 - OQ-072: **What, if anything, should a client verify about a proxied remote
-  endpoint beyond the proxy's own certificate validation?** The no-native-TLS
-  decision defers this.
+  endpoint beyond the checks the proxy itself performs?** The decision that the
+  daemon terminates no encryption defers this.
 - OQ-073: **Should tokens expire, and what refresh mechanism would replace the
   first version's non-expiring tokens?**
 - OQ-074: **Should the daemon gain a Windows client credential path, and what
@@ -203,13 +208,14 @@ until the proposal is accepted.
 
 ## 15.10 Evidence gaps and recorded contradictions
 
-- OQ-083: **Windows evidence is incomplete.** The pipe has never executed, the
-  descriptor has never been read back, a remote or low-integrity client has never
-  been observed, and the Windows client constructor does not exist. The checks
-  that would close these are listed in `14-acceptance-criteria.md`.
+- OQ-083: **Windows evidence is incomplete.** The Windows local transport has
+  never executed, its access rule has never been read back, a remote or
+  low-integrity client has never been observed, and the Windows client
+  constructor does not exist. The checks that would close these are listed in
+  `14-acceptance-criteria.md`.
 - OQ-084: **The Windows continuous integration job's daemon half had never run on
-  a runner with the native compiler when this specification was written.** A first
-  successful run is the only proof.
+  a runner carrying the toolchain the daemon needs when this specification was
+  written.** A first successful run is the only proof.
 - OQ-085: **The client's reconnection policy is contradicted across earlier
   sources.** An early design decision says the client reconnects with
   jittered backoff; the later realtime decisions say the client performs no
@@ -225,19 +231,18 @@ until the proposal is accepted.
 - OQ-088: **The ACL wording "configured owner and group" does not match the
   implemented rule.** The rule fixes the owner as the daemon's user and makes only
   the group configurable. This specification follows that rule.
-- OQ-089: **"Extraction refuses entry permissions" is broader than the contract's
-  refined rule**, which accepts an undeclared mode or `0600` and refuses anything
-  else. This specification follows the contract.
-- OQ-090: **The plugin ABI minor appears as both 1 and 2 in different sources.** This specification follows the approved contract and the
-  implementation baseline: major 1, minor 2, with the initialisation entry at slot 0.
-- OQ-091: **Whether the contract's dependency-count measurements and a few bearer
-  identifier spellings should be corrected in the contract text** is an
-  editorial question for the contract owner. It does not change any requirement
-  in this specification.
-- OQ-092: **Whether the contract text should state the host-side not-found rule
-  for an identifier another instance holds** (same as OQ-064) and whether the
-  staging-directory name should name all three components are contract-editorial
-  items, not product decisions.
+- OQ-089: **"Unpacking refuses entry permissions" is broader than the refined
+  rule**, which accepts an entry that declares no mode or an owner-only mode and
+  refuses anything else. This specification follows the refined rule.
+- OQ-090: Retired. The removed realization named fixed contract version numbers;
+  the specification now leaves them open (`OQ-111`) and requires only that the
+  host refuse a differing major and an older minor (`PLG-014`).
+- OQ-091: Retired. The dependency-count measurements and identifier spellings it
+  referred to belonged to the removed realization and are no longer part of the
+  contract text.
+- OQ-092: Retired. The staging-directory name and the host-side not-found sentence
+  belonged to the removed realization. The not-found rule is now stated at
+  `HST-023`.
 - OQ-093: **The exact criteria for declaring the Windows transport supported,
   and who owns the first Windows runner, are undecided.**
 
@@ -248,15 +253,15 @@ until the proposal is accepted.
 - OQ-095: **What is the plugin directory's exact path, and what happens when it
   does not exist?** Start-up scans a directory; the path and the absent-directory
   behavior are not fixed.
-- OQ-096: **Should the plugin ABI add a vtable size field, or is the residual
-  accepted?** A wrong-shape vtable is not detectable at load today, because the
-  vtable carries no size field.
-- OQ-097: **What is the pinning and upgrade policy for the pre-1.0 protocol
-  dependencies that move together?** Exact pinning and the regeneration cost of
-  a bump are recorded as an open maintenance decision.
-- OQ-098: **Is the daemon required to ship as a self-contained binary with no
-  dynamically linked system dependency?** The source states this as a preference
-  and records the static-linking posture as unverified.
+- OQ-096: Retired. `PLG-012` now requires both directions of the contract to
+  declare their extent, so a wrong-shape contract is refused at load rather than
+  accepted.
+- OQ-097: **What is the pinning and upgrade policy for third-party dependencies
+  whose major versions move together?** Exact pinning and the regeneration cost of
+  a bump are an open maintenance decision.
+- OQ-098: **Is the daemon required to ship as one self-contained artifact with no
+  dependency on a separately installed runtime?** The preference is recorded; the
+  distribution posture is unverified.
 - OQ-099: **Should the daemon reject a surface name outside the shipped classes?**
   It records the name as descriptive data today.
 - OQ-100: **What privacy and telemetry policy applies to conversation and task
@@ -265,3 +270,72 @@ until the proposal is accepted.
   failures?** Three error types exist ahead of the decision.
 - OQ-102: **What confirmation step, if any, should a surface show when pairing?**
   Fingerprint confirmation belonged to the superseded client-pinning design.
+
+## 15.12 Choices opened by implementation independence
+
+The specification states behavior without naming a programming language, a
+library, a wire protocol, an archive or container format, a signature algorithm,
+or a file-name spelling. Each question below is a choice an implementation makes
+and records as a decision (see `index.md`, "Decisions not invented by this
+specification"). None of them weakens a requirement that references it.
+
+- OQ-103: **What form does a plugin's code take, and how does the daemon run it
+  inside its own process?** Candidates include code loaded from a shared library,
+  a portable module instantiated by the daemon's runtime, or code written in the
+  daemon's own language. Each differs in isolation, performance, and the
+  toolchain a plugin author needs. See `PLG-001`.
+- OQ-104: **What is the structural shape of the plugin boundary contract?** The
+  entry point, the operation set, how each side declares its extent, the handshake
+  by which a call starts and completes, and the ownership rule for each payload.
+  See `PLG-010` to `PLG-019`, `PLG-046` to `PLG-052`.
+- OQ-105: **How does a plugin report pending work, receive cancellation, and ask
+  the host for a facility?** See `PLG-005`, `PLG-022` to `PLG-026`, `PLG-034`,
+  `PLG-036` to `PLG-044`.
+- OQ-106: **What encoding carries plugin payloads, and how is a payload's format
+  version declared and negotiated?** See `PLG-053` to `PLG-055`.
+- OQ-107: **What container and archive format carries an installed plugin?** The
+  file layout, how a platform target is spelled, where the manifest and the code
+  for a platform are found, and which compression methods are accepted. See
+  `BND-001` to `BND-034`.
+- OQ-108: **What signature scheme and trust mechanism decide that a bundle is
+  trusted?** The signature algorithm, the form of an authorisation chain, how a
+  key identifier is derived, and the trust store's representation. See `BND-005`
+  to `BND-016`, and `OQ-019`, `OQ-065`.
+- OQ-109: **What format does the plugin manifest take, and what are its field
+  names?** See `MAN-001` to `MAN-014`.
+- OQ-110: **What schema dialect describes capability request and response
+  schemas, configuration schemas, and workflow and task payload schemas?** See
+  `PLG-061`, `PLG-062`, `PLG-075`, `MAN-005`, and `OQ-039`.
+- OQ-111: **What version numbers does the plugin boundary contract carry, and how
+  do the contract version, the container version, and a plugin's own version
+  relate?** See `PLG-011` to `PLG-015`, `OQ-058`.
+- OQ-112: **Which correctness properties are worth proving at build time, and with
+  what tooling?** The boundary hand-offs are the first candidate, but the question
+  covers any property a compiler or a proof tool could establish instead of a
+  runtime check. See `HST-043`.
+- OQ-113: Retired. It duplicated `OQ-022`; one decision is opened once.
+- OQ-114: **What local transport reaches the daemon on each supported platform,
+  and what access rule protects it?** See `NET-001`, `NET-002`, `NET-004` to
+  `NET-010`, and `CFG-001` to `CFG-004`.
+- OQ-115: **What remote listener exposes the daemon, and how does forwarded
+  client information arrive at it?** See `NET-013` to `NET-025`.
+- OQ-116: **What names and default locations do the operator-facing settings, the
+  local endpoint, and the state store use?** See `CFG-001` to `CFG-015` and
+  section 12.1.
+- OQ-117: **What syntax expresses a secret reference from a literal, an
+  environment variable, a platform credential store, or a file?** See `CFG-006` to
+  `CFG-010`.
+- OQ-118: **What carrier names and value encodings carry surface identity,
+  credentials, request identifiers, and refusal causes?** See `IDN-001` to
+  `IDN-008`, `API-007`, and `CAN-002` to `CAN-006`.
+- OQ-119: **What names do event channels use, and what encoding carries an event
+  payload?** See `RTS-005`, `RTS-008`, `RTS-014`.
+- OQ-120: **What form does a minted credential take, and which irreversible
+  function stores it?** See `AUT-013`, `AUT-014`, `AUT-032`.
+- OQ-121: **Which programming language, runtime, and third-party dependency set
+  does the implementation use, and what footprint must they respect?** See
+  `NFR-001` to `NFR-003`, `CMP-007`, `OQ-098`.
+- OQ-122: **What product stores the daemon's persistent state and the agent
+  runtime's session state?** See `CFG-011`, `CFG-012`, `SES-002`, `OQ-012`.
+- OQ-123: **What form does a client request identifier take, within the length
+  and character bound `CAN-002` fixes?** See `CAN-002`, `CAN-004`, `CAN-005`.

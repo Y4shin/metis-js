@@ -42,15 +42,19 @@ obligations that no component violates.
 
 ## 11.3 Plugin and bundle invariants
 
-- INV-013: **Each side of the plugin boundary MUST free only memory it
-  allocated.** `[current]`
-- INV-014: **Plugin code MUST run only while the host knows it is running; a
-  library MUST NOT be unmapped while a future, waker clone, or callback can still
-  reference it.** `[current]`
+- INV-013: **Each side of the plugin boundary MUST release only the
+  payloads it owns.** `[current]`
+- INV-014: **Plugin code MUST run only while the host knows it is running; code
+  MUST NOT be released while a pending result, a completion signal, or a callback
+  can still reference it.** `[current]`
 - INV-015: **The plugin host MUST refuse a capability call when the capability is
   undeclared, disabled, or version-incompatible.** `[current]`
 - INV-036: **The daemon MUST refuse a tool call that is outside the caller's
   agent-context permissions.** `[planned]`
+- INV-019: **A plugin MUST NOT observe two configurations in one process
+  lifetime.** `[current]`
+- INV-020: **A plugin's own version MUST NOT change whether it loads (see
+  `PLG-017`).** `[current]`
 - INV-016: **A trust failure MUST stop daemon start-up; a container refusal MUST
   disable only that bundle.** `[current]`
 - INV-017: **A plugin's identity for configuration MUST be the name under which
@@ -59,15 +63,11 @@ obligations that no component violates.
 - INV-018: **A disabled plugin MUST remain visible and identifiable, and invoking
   one of its capabilities MUST answer with the disabled refusal and its reason.**
   `[current]`
-- INV-019: **A plugin MUST NOT observe two configurations in one process
-  lifetime.** `[current]`
-- INV-020: **A plugin's own version MUST NOT change whether it loads (see
-  `PLG-017`).** `[current]`
 - INV-021: **A bundle MUST be signed over every byte a user installs, so no
   installed artifact escapes the signature.** `[current]`
 - INV-022: **A carried key identifier MUST decide nothing; the daemon compares only a
   recomputed key identifier.** `[current]`
-- INV-023: **A plugin MUST NOT be unloaded to disable it.** `[current]`
+- INV-023: **A plugin MUST NOT be disabled by releasing its code.** `[current]`
 
 ## 11.4 Event and stream invariants
 
@@ -87,7 +87,7 @@ obligations that no component violates.
 ## 11.5 Security invariants
 
 - INV-030: **A token, a preshared key, or any other secret MUST NOT appear in a
-  URL, a query string, or a log line.** `[current]`
+  call's address, in anything a proxy records, or in a log line.** `[current]`
 - INV-031: **The daemon MUST store only an irreversible hash of a token (see
   `AUT-014`).** `[current]`
 - INV-032: **A network-reachable listener MUST require a credential on every
@@ -96,7 +96,7 @@ obligations that no component violates.
 - INV-033: **A local endpoint's access control MUST be established before the
   daemon accepts a connection, and a pre-existing path that violates the rule
   MUST be refused rather than repaired.** `[current]`
-- INV-034: **A forwarded header MUST NOT influence authorization; it informs
+- INV-034: **Information a proxy forwards MUST NOT influence authorization; it informs
   only exposure decisions and diagnostics.** `[current]`
 - INV-035: **A component MUST NOT claim encryption, authentication, or isolation it
   cannot observe or enforce.** `[current]`
@@ -117,7 +117,7 @@ read configuration once
 
 A trust failure, a plugin directory that cannot be listed, a bundle file that
 cannot be read from the filesystem, an invalid or name-mismatched manifest, or a
-refused unload stops start-up. A disable-class failure, including a container
+refused release stops start-up. A disable-class failure, including a container
 this build cannot read, lets start-up finish with that plugin listed as disabled.
 
 ### Surface credential

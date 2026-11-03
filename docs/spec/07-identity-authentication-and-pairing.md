@@ -21,12 +21,13 @@
   merely because another handler checks it; each handler that depends on the
   declaration MUST check it.** `[current]`
 - IDN-008: **Each surface that the application ships MUST declare one of the
-  documented surface classes: `cli`, `ui`, `test`, or `unspecified`.** The daemon
-  records a declared surface name as descriptive data; whether it rejects
-  an unknown name is open (`OQ-099`). `[current]`
+  documented surface classes: terminal command line, user interface, test, or
+  unspecified.** The daemon records a declared surface name as descriptive data;
+  whether it rejects an unknown name is open (`OQ-099`). The spelling of a class
+  name is open (`OQ-118`). `[current]`
 
-The exact metadata names used by the current realization are recorded in
-`12-external-interfaces.md`.
+How the identity declaration is carried is an implementation's choice
+(`OQ-118`). The refusal requirements above are not.
 
 ## 7.2 Admission policies
 
@@ -43,8 +44,8 @@ The exact metadata names used by the current realization are recorded in
   the authentication.** `[current]`
 - AUT-005: **Under token-required policy, a call that presents no credential MUST
   be refused as a missing credential.** `[current]`
-- AUT-006: **Under token-required policy, a call that presents a credential that
-  is not a bearer credential MUST be refused as invalid, not as missing.**
+- AUT-006: **Under token-required policy, a call that presents a credential of a
+  kind the daemon does not accept MUST be refused as invalid, not as missing.**
   `[current]`
 - AUT-007: **Under token-required policy, a call whose surface is unknown or
   revoked MUST be refused as revoked.** `[current]`
@@ -65,8 +66,8 @@ The exact metadata names used by the current realization are recorded in
   identity declaration.** `[current]`
 - AUT-013: **The daemon MUST return the token text exactly once and MUST NOT be
   able to return it again.** `[current]`
-- AUT-014: **The daemon MUST store only an irreversible hash of the token, never
-  the token itself.** `[current]`
+- AUT-014: **The daemon MUST store only an irreversible function of the token,
+  never the token itself.** The function is open (`OQ-120`). `[current]`
 - AUT-015: **The daemon MUST compare the presented preshared key in constant time.**
   `[current]`
 - AUT-043: **The daemon MUST complete the preshared-key comparison before writing
@@ -78,8 +79,8 @@ The exact metadata names used by the current realization are recorded in
   `[current]`
 - AUT-018: **Pairing MUST be reachable over both the local transport and the
   remote listener, gated by the same preshared key.** `[current]`
-- AUT-019: **The preshared key MUST travel in the pairing request body and MUST
-  NOT appear in a URL or a query string.** `[current]`
+- AUT-019: **The preshared key MUST travel with the pairing call's content and
+  MUST NOT appear in its address or anywhere a proxy records.** `[current]`
 - AUT-020: **Pairing is optional. An absent or empty preshared key MUST close
   pairing while the daemon starts and every other call keeps serving.**
   `[current]`
@@ -100,10 +101,10 @@ The exact metadata names used by the current realization are recorded in
   per-client permissions or scopes.** `[current]`
 - AUT-026: **Every paired client MUST have the same access; permission decisions
   belong to agent contexts, not to devices.** `[current]`
-- AUT-027: **A token MUST be presented as a bearer credential in request metadata
-  on every call, including the event stream.** `[current]`
-- AUT-028: **A token MUST NOT appear in a URL, a query string, or a log line.**
-  `[current]`
+- AUT-027: **A token MUST be presented with every call, including the event
+  stream.** `[current]`
+- AUT-028: **A token MUST NOT appear in the call's address, in anything a proxy
+  records, or in a log line.** `[current]`
 - AUT-029: **Tokens MUST NOT expire in the first version; an expiry or refresh
   mechanism MAY be added later without invalidating the current credential
   model.** `[current]`
@@ -118,18 +119,17 @@ The exact metadata names used by the current realization are recorded in
 
 ## 7.5 Credential storage on the client
 
-- AUT-034: **A surface MUST keep its token in the platform keychain when the
-  platform keychain's command-line tool is available, and otherwise in an
-  owner-only file.** `[current]`
-- AUT-035: **The fallback credential file MUST be mode 600 inside a directory at
-  mode 700 on Unix-like systems.** `[current]`
+- AUT-034: **A surface MUST keep its token in the platform credential store when
+  the platform offers one, and otherwise in an owner-only file.** `[current]`
+- AUT-035: **The fallback credential file MUST be owner-only, inside an owner-only
+  directory, where the platform expresses access as permissions.** `[current]`
 - AUT-036: **The client MUST report which backend stored the credential.**
   `[current]`
-- AUT-037: **A keychain that is present but refuses MUST be an error; the client
-  MUST NOT silently fall back to the file when the keychain exists and fails.**
-  `[current]`
-- AUT-038: **A surface name that cannot be used as a single file name MUST be
-  refused rather than resolved into a path that leaves the credential
+- AUT-037: **A credential store that is present but refuses MUST be an error; the
+  client MUST NOT silently fall back to the file when the store exists and
+  fails.** `[current]`
+- AUT-038: **A surface name that cannot be used safely as a single file name MUST
+  be refused rather than resolved into a path that leaves the credential
   directory.** `[current]`
 - AUT-039: **Credential lookup MUST consult exactly one backend, so one token
   does not exist in two places at once.** `[current]`
@@ -152,7 +152,7 @@ The exact metadata names used by the current realization are recorded in
   lockout. Repeated guesses are slowed only by the network. This is an open risk.
 - Note 3: Local access control bounds access to the daemon's operating-system
   account and configured group. Any process running as that account, in any logon
-  session, can connect on Windows, exactly as mode 0700 behaves on Unix.
+  session, can connect, exactly as owner-only permissions behave on a filesystem.
 - Note 4: An implementation that caches credentials still makes a revocation
   take effect no later than the next start. The current implementation reads the
   store on each call, so a revocation can take effect sooner.

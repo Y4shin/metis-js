@@ -1,56 +1,60 @@
 # 9. Plugins: contract, bundles, manifests, host lifecycle, and authoring
 
-The plugin system is an external compatibility contract in two directions. A
-third-party author writes a plugin against the ABI and the bundle format, and an
-operator installs the resulting file. The contract text exists so that a second
-implementation can be written from the text alone. For that reason the ABI
-operation semantics, the bundle bytes, the manifest fields, and the start-up
-outcomes are requirements of the finished application, not implementation
-choices.
+The plugin system is an external contract. A third-party author writes a plugin
+against the boundary contract and installs it as a bundle, and an operator
+installs that bundle by copying one file. The contract's operation semantics, the
+bundle's semantics, the manifest's contents, and the start-up outcomes are
+requirements of the finished application. The concrete form of each is a decision
+this specification opens in `15-open-questions.md`: what code a plugin is
+(`OQ-103`), the shape of the boundary contract (`OQ-104`), how pending work and
+cancellation are reported (`OQ-105`), the payload encoding (`OQ-106`), the
+container and archive format (`OQ-107`), the signature and trust mechanism
+(`OQ-108`), the manifest format and field names (`OQ-109`), the schema dialect
+(`OQ-110`), and the contract's version numbers (`OQ-111`).
 
 ## 9.1 Plugin model and boundary
 
-- PLG-001: **A plugin MUST be a native shared library that the daemon loads into
-  its own process.** `[current]`
+- PLG-001: **A plugin MUST be code the daemon runs inside its own process.** The
+  form that code takes is open (`OQ-103`). `[current]`
 - PLG-002: **A plugin MUST advertise its capabilities before the host serves any
   call to it.** `[current]`
 - PLG-003: **A plugin MUST supply capabilities; it MUST NOT export workflow
   steps.** `[current]`
-- PLG-004: **A plugin MUST NOT require its own asynchronous runtime, executor, or
-  worker thread; the host MUST own when plugin code runs.** `[current]`
+- PLG-004: **A plugin MUST NOT run code on its own schedule or keep its own
+  worker running; it MUST return control to the host, and the host MUST own when
+  plugin code runs.** `[current]`
 - PLG-005: **A plugin that must wait for a timer or I/O MUST request the facility
-  from the host, return a pending poll, and wake the host when the answer
-  arrives; it MUST NOT block its poll.** `[current]`
-- PLG-006: **A plugin MUST NOT be treated as sandboxed. Running a plugin is native
-  code execution in the daemon process, and a plugin that blocks during
-  initialisation hangs the daemon.** `[current]`
-- PLG-007: **Language-specific values, trait objects, futures, strings, vectors,
-  runtime handles, and channel types MUST NOT cross the ABI boundary as such; only
-  the defined primitive representations may cross.** `[current]`
+  from the host, report a pending result, and signal the host when the answer
+  arrives; it MUST NOT block while it waits.** `[current]`
+- PLG-006: **A plugin MUST NOT be treated as sandboxed. Running a plugin is code
+  execution with the daemon's privileges in the daemon's process, and a plugin
+  that blocks during initialisation hangs the daemon.** `[current]`
+- PLG-007: **A value the host cannot interpret MUST NOT cross the boundary; only
+  the representations the contract defines may cross it.** `[current]`
 - PLG-008: **A high-level authoring type in any language MUST remain internal to
-  each compiled plugin; the export adapters MUST translate an implementation into
-  the ABI.** `[current]`
-- PLG-009: **Only pointers, integers, function pointers, byte buffers, and
-  explicitly defined structures MUST cross the boundary.** `[current]`
+  each plugin; the export layer MUST translate an implementation into the
+  boundary contract.** `[current]`
+- PLG-009: **Only the representations the contract defines MAY cross the
+  boundary.** `[current]`
 
-## 9.2 ABI versioning and tables
+## 9.2 Contract versioning and operations
 
-- PLG-010: **A plugin MUST export exactly one entry symbol, named
-  `metis_plugin_entry_v1`, which returns a pointer to the plugin's function
-  table.** `[current]`
-- PLG-011: **The ABI major version MUST be part of the entry symbol, so a library
-  built for another major is refused before any table entry is read.**
-  `[current]`
-- PLG-012: **Both the plugin table and the host table MUST be size-prefixed, with
-  the size as the first field, and presence of an entry MUST be decided by the
-  reported size, never by whether a pointer looks non-null.** `[current]`
-- PLG-013: **Within one ABI major, the table MUST be append-only, so a plugin
-  built against a newer minor is read up to the entries this host knows, decided
-  by its reported size.** `[current]`
-- PLG-014: **The current ABI is major 1, minor 2; a reader MUST tolerate the minor
-  it knows and any newer minor in the same major, and MUST refuse an older
-  minor.** `[current]`
-- PLG-015: **The manifest MUST declare the ABI major and the minimum ABI minor
+- PLG-010: **A plugin MUST expose exactly one entry point, through which the host
+  obtains every other operation.** The contract's structural shape is open
+  (`OQ-104`). `[current]`
+- PLG-011: **The contract's major version MUST be decided before any operation is
+  used, so a plugin built for another major is refused before it serves
+  anything.** `[current]`
+- PLG-012: **Both directions of the contract MUST declare their extent, and an
+  operation MUST be used only when the declared extent covers it, never because a
+  value or a reference happens to be present.** `[current]`
+- PLG-013: **Within one contract major, the operation set MUST be append-only, so
+  a plugin built against a newer minor is served up to the operations this host
+  knows, decided by the declared extent.** `[current]`
+- PLG-014: **The host MUST accept the contract minor it knows and any newer minor
+  in the same major, and MUST refuse an older minor than it requires.** The
+  version numbers are open (`OQ-111`). `[current]`
+- PLG-015: **The manifest MUST declare the contract major and the minimum minor
   the plugin requires, with no range syntax, and the host MUST refuse a differing
   major or a host minor lower than the required minimum.** `[current]`
 - PLG-016: **A capability whose descriptor version the host does not support MUST
@@ -58,135 +62,138 @@ choices.
   `[current]`
 - PLG-017: **The plugin's own version MUST be recorded and MUST never gate a
   load.** `[current]`
-- PLG-018: **A stale pre-release plugin whose table order does not match this
+- PLG-018: **A stale pre-release plugin whose operation order does not match this
   build's MUST be refused by the minor comparison rather than misread.**
   `[current]`
 
-## 9.3 Plugin table operations
+## 9.3 Plugin-side operations
 
-- PLG-019: **The plugin table MUST provide asynchronous initialisation, instance
-  destruction, capability listing, one generic invocation, cancellation, buffer
-  release, shutdown, and service completion.** `[current]`
+- PLG-019: **The plugin side of the contract MUST provide initialisation that may
+  complete later, instance destruction, capability listing, one generic
+  invocation, cancellation, payload release, shutdown, and service completion.**
+  `[current]`
 - PLG-020: **Initialisation MUST construct and initialise an instance in one
-  fallible asynchronous operation.** It receives the host table and one
-  host-owned payload carrying the plugin's configuration and the host context.
-  `[current]`
+  fallible operation that may complete later.** It receives the host side of the contract and
+  one host-owned payload carrying the plugin's configuration and the host
+  context. `[current]`
 - PLG-076: **On success, initialisation MUST return the instance and a
-  plugin-owned future, and the host MUST NOT register or route to the instance
-  until that future resolves successfully.** `[current]`
-- PLG-021: **There MUST NOT be a separate instance-creation entry.**
+  plugin-owned pending result, and the host MUST NOT register or route to the
+  instance until that result completes successfully.** `[current]`
+- PLG-021: **There MUST NOT be a separate instance-creation operation.**
   `[current]`
-- PLG-022: **The invocation entry MUST receive the instance, the capability name,
-  a host-chosen request identifier, the request payload, and the host table, and
-  on success MUST return a plugin-owned future.** The request payload is valid
-  for that call only. `[current]`
-- PLG-023: **Cancellation MUST mark the cancellation token of the call identified
-  by the request identifier.** `[current]`
-- PLG-024: **Buffer release MUST be the only way the host frees plugin-allocated
-  memory, and the host MUST never free plugin memory directly.** `[current]`
-- PLG-025: **Shutdown MUST quiesce the instance; the host MUST drop every future
-  before calling shutdown, so nothing may arrive after it returns.**
+- PLG-022: **The invocation operation MUST receive the instance, the capability
+  name, a host-chosen request identifier, the request payload, and the host side
+  of the contract, and on success MUST return a plugin-owned pending result.** The
+  request payload is valid for that call only. `[current]`
+- PLG-023: **Cancellation MUST mark the call identified by the request identifier
+  so the plugin resolves it as cancelled.** `[current]`
+- PLG-024: **Payload release MUST be the only way the host releases a
+  plugin-owned payload, and the host MUST never release one itself.**
+  `[current]`
+- PLG-025: **Shutdown MUST quiesce the instance; the host MUST drop every pending
+  result before calling shutdown, so nothing may arrive after it returns.**
   `[current]`
 - PLG-026: **Service completion MUST answer an earlier service request with the
-  same request identifier, and the plugin MUST wake the waiting future from
-  it.** `[current]`
+  same request identifier, and the plugin MUST signal the waiting pending result
+  from it.** `[current]`
 - PLG-027: **Instance destruction MUST be called only after shutdown.**
   `[current]`
-- PLG-028: **The table MUST NOT expose a counters entry or any plugin-side metric
-  surface.** `[current]`
+- PLG-028: **The plugin side of the contract MUST NOT expose a counters operation
+  or any plugin-side metric surface.** `[current]`
 
-## 9.4 Host table and callbacks
+## 9.4 Host-side callbacks
 
-- PLG-029: **The host table MUST carry a host-state pointer and exactly the
-  callbacks progress, event emission, logging, and service request.**
+- PLG-029: **The host side of the contract MUST carry a host-state value and
+  exactly the callbacks progress, event emission, logging, and service request.**
   `[current]`
 - PLG-030: **The host MUST NOT provide a completion callback; a call completes
-  when a poll returns success.** `[current]`
+  when the plugin reports its result ready.** `[current]`
 - PLG-031: **Progress MUST carry the request identifier and a payload.**
   `[current]`
 - PLG-032: **Event emission MUST carry a topic and a payload and MUST NOT carry a
   request identifier; a plugin that needs correlation MUST put an identifier in
   its payload.** `[current]`
-- PLG-033: **Logging MUST carry a level in the range 0 to 3, meaning debug, info,
-  warn, and error, and a message.** `[current]`
+- PLG-033: **Logging MUST carry a severity of debug, info, warn, or error, and a
+  message.** `[current]`
 - PLG-034: **A service request MUST carry the facility name, the request
   identifier, and a plugin-owned payload, and the host MUST answer it later
   through service completion.** The current facility is a timer; I/O readiness is
   planned. `[current]`
-- PLG-035: **Every host callback MUST be panic-guarded inside its own frame, so a
-  panic becomes a recorded internal failure instead of unwinding across the
-  boundary.** `[current]`
+- PLG-035: **Every host callback MUST contain an unexpected failure within its own
+  extent, so a fault becomes a recorded internal failure instead of propagating
+  into the host.** `[current]`
 
-## 9.5 Futures, wakers, and status
+## 9.5 Pending results, completion signals, and status
 
-- PLG-036: **A poll MUST return exactly one of: success with a plugin-allocated
-  response buffer, pending, or a terminal status.** `[current]`
-- PLG-037: **Only the host MUST poll a future, one poll at a time; two concurrent
-  polls on one handle are a protocol violation.** `[current]`
-- PLG-038: **A poll that blocks MUST be detected by the host, recorded, and MUST
+- PLG-036: **A result query MUST answer exactly one of: success with a
+  plugin-owned response payload, pending, or a terminal status.** The handshake
+  that surrounds it is open (`OQ-105`). `[current]`
+- PLG-037: **Only the host MUST drive a pending result, one query at a time; two
+  concurrent queries on one handle are a protocol violation.** `[current]`
+- PLG-038: **A query that blocks MUST be detected by the host, recorded, and MUST
   quarantine the plugin.** `[current]`
-- PLG-039: **The host MUST drop a future exactly once, and never while a poll is
-  in progress.** `[current]`
-- PLG-040: **The host MUST pass a waker that is one owning reference for that
-  poll, MUST release it when the poll returns, and the plugin MUST NOT release
-  it.** `[current]`
-- PLG-041: **A plugin MAY clone the waker, each clone is one owning reference, and
-  the plugin MUST drop every clone.** `[current]`
-- PLG-042: **One clone MUST be consumed by exactly one wake or drop; a second use
-  of a consumed clone MUST be refused rather than release state twice.**
+- PLG-039: **The host MUST drop a pending result exactly once, and never while a
+  query is in progress.** `[current]`
+- PLG-040: **The host MUST pass one owned completion handle for that query, MUST
+  release its own use of it when the query returns, and the plugin MUST NOT
+  release the host's use.** `[current]`
+- PLG-041: **A plugin MAY take further uses of the completion handle, each is
+  separately owned, and the plugin MUST release every one.** `[current]`
+- PLG-042: **One use MUST be consumed by exactly one signal or release; a second
+  use of a consumed handle MUST be refused rather than release state twice.**
   `[current]`
-- PLG-043: **A wake MAY arrive from any thread, MUST be cheap and non-blocking,
-  and MAY arrive after the future was dropped; the host MUST detect and record
-  such a wake and MUST NOT dereference freed state.** `[current]`
-- PLG-044: **A recorded late wake MUST name the request identifier of the call it
-  belongs to.** `[current]`
-- PLG-077: **A panic inside an exported poll or drop MUST become a terminal
-  internal status, drop MUST remain legal afterwards, and no boundary path may
-  reach process abort.** `[current]`
+- PLG-043: **A signal MAY arrive at any time and from any execution context, MUST
+  be cheap and non-blocking, and MAY arrive after the pending result was dropped;
+  the host MUST detect and record such a late signal and MUST NOT touch state it
+  has already released.** `[current]`
+- PLG-044: **A recorded late signal MUST name the request identifier of the call
+  it belongs to.** `[current]`
+- PLG-077: **An unexpected failure inside an exported result query or drop MUST
+  become a terminal internal status, drop MUST remain legal afterwards, and no
+  boundary path may end the daemon process.** `[current]`
 - PLG-045: **The status space MUST be frozen to: ok, invalid argument, not found,
   permission denied, cancelled, internal, unsupported, and pending.** Higher
   layers add meaning rather than values. `[current]`
 
-## 9.6 Buffers, payloads, and ownership
+## 9.6 Payloads and ownership
 
-- PLG-046: **A buffer MUST carry a pointer, length, capacity, and one of the
-  owners none, host, or plugin.** `[current]`
-- PLG-047: **Each side MUST free only what it allocated; the non-owning side MUST
-  never free the buffer.** `[current]`
-- PLG-048: **A response buffer returned by a successful poll MUST be
-  plugin-allocated and MUST be freed by the host through the plugin's buffer
-  release entry.** `[current]`
+- PLG-046: **A payload MUST declare its owner, which is one of nobody, the host,
+  or the plugin.** `[current]`
+- PLG-047: **Each side MUST release only what it owns; the non-owning side MUST
+  never release the payload.** `[current]`
+- PLG-048: **A response payload returned by a successful result query MUST be
+  plugin-owned and MUST be released by the host through the plugin's payload
+  release operation.** `[current]`
 - PLG-049: **A request payload MUST be host-owned and valid only for the call.**
   `[current]`
-- PLG-050: **A service-request payload MUST be plugin-owned and MUST be freed by
-  the host through the plugin's buffer release entry.** `[current]`
+- PLG-050: **A service-request payload MUST be plugin-owned and MUST be released
+  by the host through the plugin's payload release operation.** `[current]`
 - PLG-051: **A service-completion payload and an initialisation payload MUST be
   host-owned and borrowed for that call; a plugin that needs one afterwards MUST
   copy it.** `[current]`
-- PLG-052: **Buffer release MUST be reentrant; the host MAY call it from inside a
-  service request.** `[current]`
-- PLG-053: **Every payload MUST carry the one-byte envelope: four bits of payload
-  format version, one codec bit, and three reserved bits that MUST be zero.**
-  `[current]`
-- PLG-054: **The current payload format version is 1 and the only supported codec
-  is JSON; an unknown codec MUST be refused as unsupported, while a bad format
-  version or non-zero reserved bits MUST be refused as invalid argument.**
-  `[current]`
-- PLG-055: **Payload evolution within an ABI major MUST be additive: unknown
+- PLG-052: **Payload release MUST be reentrant; the host MAY call it from inside
+  a service request.** `[current]`
+- PLG-053: **Every payload MUST declare the payload format version it is written
+  in.** `[current]`
+- PLG-054: **An unknown payload format version MUST be refused as unsupported,
+  and a malformed payload MUST be refused as invalid argument.** The transport
+  encoding behind a payload format version is open (`OQ-106`). `[current]`
+- PLG-055: **Payload evolution within a contract major MUST be additive: unknown
   fields are ignored and new fields are optional.** `[current]`
-- PLG-056: **The payload envelope constants and the per-entry slot rules MUST be
-  published in a C header for plugin implementers, so an implementer in another
-  language does not have to guess them.** `[current]`
+- PLG-056: **The boundary contract's constants and per-operation rules MUST be
+  published in a form a plugin author in any language can implement from, so an
+  author does not have to guess them.** `[current]`
 
 ## 9.7 Capabilities and routing
 
 - PLG-057: **A capability MUST have a name, a kind, a version, a request schema,
   and a response schema.** `[current]`
-- PLG-058: **Capability names MUST be instance-qualified as
-  `<instance>.<tool>` at the host boundary.** `[current]`
-- PLG-059: **An instance name that itself contains a dot MUST route like any
-  other instance name; the tool half MUST come from the routing owner rather than
-  from a first-dot split.** `[current]`
+- PLG-058: **Capability names MUST be instance-qualified at the host boundary,
+  so a capability name alone does not decide which instance serves it.**
+  `[current]`
+- PLG-059: **An instance name that itself contains the qualification separator
+  MUST route like any other instance name; the capability half MUST come from the
+  routing owner rather than from a first-separator split.** `[current]`
 - PLG-060: **The registry MUST refuse a duplicate qualified capability name.**
   `[current]`
 - PLG-061: **The host MUST validate a request against the capability's published
@@ -198,7 +205,7 @@ choices.
 - PLG-063: **The registry MUST support enable and disable of an entry.**
   `[current]`
 - PLG-064: **Disabling MUST be registry state only: it refuses new calls and
-  leaves the instance, its in-flight calls, and its library alone.** `[current]`
+  leaves the instance, its in-flight calls, and its code alone.** `[current]`
 - PLG-065: **Enabling MUST accept calls again without tearing anything down.**
   `[current]`
 - PLG-066: **The host MUST refuse a call to a capability the plugin did not
@@ -209,9 +216,8 @@ choices.
 
 ## 9.8 Initialisation payload and failures
 
-- PLG-068: **The initialisation payload body MUST be one JSON object with two
-  parts: `config`, the plugin's own resolved configuration, and `host_context`,
-  what the host discloses about itself.** `[current]`
+- PLG-068: **The initialisation payload MUST carry two parts: the plugin's own
+  resolved configuration and the host context.** `[current]`
 - PLG-069: **The host context MUST contain the instance name, MAY contain a data
   directory, and MUST contain the highest capability descriptor version the host
   serves.** `[current]`
@@ -227,79 +233,73 @@ choices.
   invalid-argument failure means the configuration does not match what the plugin
   declared, and every other terminal status means the plugin is defective.**
   `[current]`
-- PLG-074: **On a failed initialisation, the host MUST drop the future and then
-  destroy the instance, and the instance MUST tolerate destruction after a failed
-  initialisation.** `[current]`
+- PLG-074: **On a failed initialisation, the host MUST drop the pending result and
+  then destroy the instance, and the instance MUST tolerate destruction after a
+  failed initialisation.** `[current]`
 - PLG-075: **A plugin's configuration schema MUST be declared in the manifest and
-  MUST be the schema of the initialisation payload's `config` part.**
+  MUST be the schema of the initialisation payload's configuration part.**
   `[current]`
 
 ## 9.9 Bundles and signing
 
-- BND-001: **A plugin MUST ship as exactly one file with the extension `.metis`,
-  containing a fixed-size container header, an X.509 certificate chain over
-  Ed25519 keys, a payload signature, and a ZIP archive.** `[current]`
-- BND-002: **The container header MUST be exactly 40 bytes and MUST contain, in
-  order and big-endian: an 8-byte magic `METISBND`, a 2-byte container format
-  version equal to 1, a 2-byte signing suite equal to 1 for X.509 over Ed25519, a
-  2-byte header length equal to 40, a 2-byte reserved field equal to zero, a
-  4-byte chain length, an 8-byte signature offset, a 4-byte signature length, and
-  an 8-byte ZIP length.** `[current]`
-- BND-003: **The signature offset MUST equal the header length plus the chain
-  length, and the file length MUST equal the signature offset plus the signature
-  length plus the ZIP length.** `[current]`
-- BND-004: **The signed message MUST be, in order, the 27-byte domain tag
-  `METIS-PLUGIN-BUNDLE-PAYLOAD`, the 40 header bytes, the chain bytes, and the ZIP
-  bytes, with the signature field deleted rather than zero-filled.** The domain
-  tag MUST NOT carry the container version. `[current]`
-- BND-005: **The signature MUST be raw Ed25519 of 64 octets, made by the leaf
-  key, and verification MUST be strict: non-canonical key or signature encodings
-  and small-order keys MUST be refused.** `[current]`
-- BND-006: **The chain region MUST be a concatenation of whole DER X.509 version
-  3 certificates, leaf-authorising certificate first and anchor last, MUST be
-  consumed exactly with no trailing bytes, and MUST hold at most eight links.**
+- BND-001: **A plugin MUST ship as exactly one file containing a signed container,
+  the manifest, and the plugin's code.** The container format is open (`OQ-107`).
   `[current]`
-- BND-007: **The chain region MUST be read by a strict DER decoder that refuses
-  non-canonical input before interpreting it.** `[current]`
+- BND-002: **The container MUST declare its format version, its signing scheme,
+  its signature, and the extent of the content the signature covers, so that a
+  truncated file, an unknown format version, and content added after signing are
+  each detectable.** `[current]`
+- BND-003: **A container shorter or longer than its declared regions MUST be
+  refused.** `[current]`
+- BND-004: **The signature MUST cover the container's own declared fields, the
+  manifest, and the plugin's code, with the signature itself excluded from the
+  signed bytes rather than zero-filled.** `[current]`
+- BND-005: **Signature verification MUST be strict: a non-canonical signature or
+  key encoding and a weak key MUST be refused.** The scheme is open (`OQ-108`).
+  `[current]`
+- BND-006: **Trust MAY be delegated through a chain of authorisations, leaf first
+  and anchor last, consumed exactly with no trailing bytes, and at most eight
+  links long.** `[current]`
+- BND-007: **Each authorisation MUST be read by a strict, canonical-input decoder
+  that refuses non-canonical input before interpreting it.** `[current]`
 - BND-008: **Each link other than the anchor MUST be verified against the link
-  above it: the child's issuer name equal to the parent's subject name and the
-  child's signature verified under the parent's key.** `[current]`
-- BND-009: **The anchor MUST be trusted by its recomputed key identifier being in
-  the host's trust store, not by who signed it.** `[current]`
-- BND-010: **A certificate that authorises another key MUST carry basic
-  constraints with CA true; the leaf-authorising certificate MUST be an end
-  entity.** `[current]`
-- BND-011: **Basic constraints MUST be the only understood extension: any other
-  critical extension MUST refuse the chain, and any other non-critical extension
-  MUST be ignored.** `[current]`
-- BND-012: **The leaf-authorising certificate's common name MUST equal the
-  plugin's name, and an absent or empty common name MUST be refused.**
+  above it: the child's declared issuer MUST equal the parent's subject, and the
+  child's signature MUST verify under the parent's key.** `[current]`
+- BND-009: **The anchor MUST be trusted by its recomputed identifier being in the
+  host's trust set, not by who signed it.** `[current]`
+- BND-010: **An authorisation that delegates trust onward MUST declare that it may
+  delegate; the leaf authorisation MUST NOT.** `[current]`
+- BND-011: **An extension the host does not understand MUST refuse the chain when
+  it is marked critical and MUST be ignored when it is not.** `[current]`
+- BND-012: **The leaf authorisation's declared subject name MUST equal the
+  plugin's name, and an absent or empty name MUST be refused.** `[current]`
+- BND-013: **Each authorisation's validity window MUST be checked against the
+  host clock with a bounded, documented tolerance for clock skew.** The tolerance
+  is open (`OQ-108`). `[current]`
+- BND-014: **A key identifier MUST be derived from the public key by the
+  contract's defined function, and every compared identifier MUST be recomputed
+  from the key rather than trusted from the artifact.** The derivation is open
+  (`OQ-108`). `[current]`
+- BND-015: **The trust store MUST register authorities by public key, and no
+  revoked identifier may appear anywhere in a chain, the anchor included.**
   `[current]`
-- BND-013: **Each certificate's validity window MUST be checked at second
-  granularity against the host clock with at most 60 seconds of skew at each
-  end.** `[current]`
-- BND-014: **A key identifier MUST be the first 16 bytes of the SHA-256 of the
-  raw 32-byte public key, and every compared identifier MUST be recomputed from
-  the public key rather than trusted from a certificate.** `[current]`
-- BND-015: **The trust store's roots MUST be registered by public key, and no key
-  identifier in the revocation list may appear anywhere in a chain, the anchor
-  included.** `[current]`
-- BND-016: **The compiled-in root set MUST be empty; a daemon starts trusting
-  nothing and its roots and revocations are its own configuration.** `[current]`
+- BND-016: **The compiled-in trust set MUST be empty; a daemon starts trusting
+  nothing and its trusted authorities and revocations are its own
+  configuration.** `[current]`
 - BND-017: **A bundle verification refusal MUST be classified as either a trust
   failure or a container refusal.** `[current]`
 - BND-018: **A trust failure MUST stop daemon start-up; a container refusal MUST
   disable only that bundle.** `[current]`
-- BND-019: **A trust failure MUST include an empty chain, an unknown root, a
-  revoked key, an expired or not-yet-valid certificate, a malformed signature, a
+- BND-019: **A trust failure MUST include an empty chain, an unknown anchor, a
+  revoked key, an expired or not-yet-valid authorisation, a malformed signature, a
   signature that does not verify, a broken issuer and subject link, a link
   signature that does not verify, every chain-profile violation, and a leaf with
-  no usable common name.** `[current]`
-- BND-020: **A container refusal MUST include a short file, bad magic, an unknown
-  container version, an unknown signing suite, a bad header length, a non-zero
-  reserved field, bytes before the header, a span mismatch, a malformed or
-  non-canonical certificate, trailing chain bytes, and more than eight links.**
-  `[current]`
+  no usable name.** `[current]`
+- BND-020: **A container refusal MUST include a short container, an unknown
+  container version, an unknown signing scheme, a declared region length that
+  contradicts the file, bytes before the first declared region, a malformed or
+  non-canonical authorisation, trailing chain bytes, and more than eight
+  links.** `[current]`
 - BND-021: **The container checks MUST run in this order, and each refusal MUST
   answer for itself rather than for a later consequence: container fields, chain
   region, anchor key identifier, revocation, validity windows, profile, links,
@@ -307,117 +307,115 @@ choices.
 
 ## 9.10 The archive
 
-- BND-022: **A bundle's archive MUST be a ZIP file whose root carries
-  `manifest.toml` and whose `lib/` directory holds one directory per target named
-  exactly `<os>-<arch>`.** `[current]`
-- BND-023: **A target directory MUST hold exactly one file, and that file MUST be
-  the target's library.** `[current]`
-- BND-024: **Extraction MUST stage only the root manifest and this host's target
-  directory.** `[current]`
-- BND-034: **Extraction MUST validate every archive entry whether or not this
-  host's target needs it.** `[current]`
-- BND-025: **Extraction MUST refuse a ZIP that cannot be read, an entry name that
-  is absolute, carries a `..` component, is empty after removing separators, or
-  carries a null byte, a symbolic link, directory, hard link, device, socket,
-  FIFO, or any other non-regular file entry, and a declared mode other than
-  `0600`.** A declared `0600` with or without the regular-file type bit is
-  accepted, and so are zero external attributes, which declare no mode.
+- BND-022: **A bundle's payload MUST be one archive whose root carries the
+  manifest and whose declared layout carries one code entry directory per
+  supported platform.** The archive format is open (`OQ-107`). `[current]`
+- BND-023: **Each platform's entry MUST hold exactly one file, and that file MUST
+  be this platform's plugin code.** `[current]`
+- BND-024: **Unpacking MUST make available only the root manifest and this
+  platform's code entry.** `[current]`
+- BND-025: **Unpacking MUST refuse a bundle that cannot be read, an entry name
+  that is absolute, carries a parent-directory component, is empty after removing
+  separators, or carries a null character, a symbolic link, a directory, or any
+  entry that is not a regular file, and any entry whose declared access mode
+  grants access beyond the owner.** A declared owner-only mode is accepted, and
+  so are entries that declare no mode. `[current]`
+- BND-026: **The total declared-size limit MUST be evaluated from declared sizes
+  without decompressing an entry this host does not make available; only the
+  entries it makes available are decompressed and checked.** `[current]`
+- BND-027: **Unpacking MUST use one uniquely named private location, create what
+  it writes owner-only, and MUST NOT let a declared entry mode reach the
+  filesystem.** `[current]`
+- BND-028: **A refused unpacking MUST remove what it created before answering,
+  and a successful unpacking MUST own that location and remove it when released.**
   `[current]`
-- BND-031: **Extraction MUST refuse an archive with more than 256 entries, an
+- BND-029: **Whether a manifest is present MUST be decided by the manifest step,
+  not by unpacking; a bundle with no root manifest is still unpacked.** `[current]`
+- BND-030: **A bundle MAY carry several platform entries, and the host MUST load
+  only the code for its own platform.** `[current]`
+- BND-031: **Unpacking MUST refuse a bundle with more than 256 entries, an
   entry whose declared uncompressed size exceeds 64 MiB, and entries whose
   declared sizes total more than 256 MiB.** `[current]`
-- BND-032: **Extraction MUST refuse a staged entry that cannot be read, fails its
-  checksum, or uses an unsupported compression method, and an archive that has no file or more than one file directly under this host's
-  target directory (see `BND-023`).**
+- BND-032: **Unpacking MUST refuse an entry that cannot be read, fails its
+  checksum, or uses an unsupported compression method, and a bundle that has no
+  file or more than one file directly under this host's platform entry.**
   `[current]`
-- BND-026: **The total declared-size limit MUST be evaluated from declared sizes
-  without decompressing an entry this host does not stage; only staged entries'
-  bytes are decompressed and checksummed.** `[current]`
-- BND-027: **Extraction MUST stage into one uniquely named directory, create
-  staged directories at mode 700 and staged files at mode 600, and MUST NOT let a
-  declared entry mode reach the filesystem.** `[current]`
-- BND-028: **A refused extraction MUST remove its staging directory before
-  answering, and a successful extraction MUST own its staging directory and
-  remove it when released.** `[current]`
-- BND-029: **Whether a manifest is present MUST be decided by the manifest step,
-  not by extraction; a bundle with no root manifest still stages.** `[current]`
-- BND-030: **A bundle MAY carry several targets, and the host MUST load only the
-  library for its own target.** `[current]`
-- BND-033: **The host MUST resolve a manifest's declared library path only inside
-  the staged bundle and MUST refuse a path that is not of the form
-  `lib/<target>/<file name>` for this host's target.** `[current]`
+- BND-033: **The host MUST resolve the manifest's declared code path only inside
+  the staged bundle and MUST refuse a path outside this host's platform entry.**
+  `[current]`
+- BND-034: **Unpacking MUST validate every entry whether or not this
+  host's platform needs it.** `[current]`
 
 ## 9.11 The manifest
 
-- MAN-001: **Every bundle MUST carry `manifest.toml` at its archive root.**
-  `[current]`
+- MAN-001: **Every bundle MUST carry the manifest at its archive root.** The
+  manifest's format is open (`OQ-109`). `[current]`
 - MAN-002: **The manifest MUST declare the plugin identity, the plugin's own
-  version, the ABI major, the minimum ABI minor, one library path per target, the
-  capability list with each capability's name, kind, version, request schema, and
-  response schema, and the configuration schema.** `[current]`
-- MAN-003: **The manifest's declared name MUST equal the common name carried by
-  the bundle's leaf-authorising certificate.** `[current]`
-- MAN-004: **Each library path MUST be declared per target as
-  `lib/<target>/<file name>`.** `[current]`
-- MAN-005: **A JSON schema MUST be written as the equivalent plain-text structured
-  data; the current format is TOML, whose lack of null means a schema that needs
-  a null default cannot express it in that field and MUST use another
-  construct.** `[current]`
+  version, the contract major, the minimum contract minor, one code path per
+  platform, the capability list with each capability's name, kind, version,
+  request schema, and response schema, and the configuration schema.**
+  `[current]`
+- MAN-003: **The manifest's declared name MUST equal the name carried by the
+  bundle's leaf authorisation.** `[current]`
+- MAN-004: **Each code path MUST be declared per platform in the layout the
+  bundle format defines.** `[current]`
+- MAN-005: **Every schema the manifest carries MUST be expressible as structured
+  data, including a schema whose default value is null.** The schema dialect is
+  open (`OQ-110`). `[current]`
 - MAN-006: **A field the manifest reader does not know MUST be ignored rather than
   refused, so a manifest written by a newer producer stays readable.**
   `[current]`
 - MAN-007: **The manifest MUST be validated in this order: presence, readable
-  format, name equal to the leaf common name, ABI demand compatible with this
-  build, and a library for this host's target.** `[current]`
-- MAN-008: **The ABI demand check MUST refuse a differing major and a minimum
-  minor newer than this build's minor, and MUST be decided before any library
-  byte is read.** `[current]`
-- MAN-009: **The library check MUST judge only this host's target; a manifest
-  that declares other targets or none MUST be judged by what it declares for this
+  format, name equal to the leaf name, contract demand compatible with this
+  build, and code for this host's platform.** `[current]`
+- MAN-008: **The contract demand check MUST refuse a differing major and a minimum
+  minor newer than this build's minor, and MUST be decided before any plugin code
+  is read.** `[current]`
+- MAN-009: **The code check MUST judge only this host's platform; a manifest that
+  declares other platforms or none MUST be judged by what it declares for this
   host.** `[current]`
 - MAN-010: **The host MUST cross-check the manifest's capability names against the
-  names the library reports.** Only names are cross-checked at load; schemas are
-  the manifest's declared text and the library's derived schemas. `[current]`
-- MAN-014: **A manifest and library that disagree on a capability name MUST
-  disable the plugin.** `[current]`
+  names the plugin reports.** Only names are cross-checked at load; schemas are
+  the manifest's declared text and the plugin's derived schemas. `[current]`
 - MAN-011: **The manifest's capability list MUST be what the host trusts for
-  discovery, and the library's own listing MUST be the cross-check.**
+  discovery, and the plugin's own listing MUST be the cross-check.**
   `[current]`
-- MAN-012: **The manifest's schemas and the library's derived schemas MUST NOT be
+- MAN-012: **The manifest's schemas and the plugin's derived schemas MUST NOT be
   assumed identical, and a load MUST NOT be refused only because the two differ.**
   `[current]`
 - MAN-013: **The plugin's own version MUST be recorded and MUST never gate a
   load (see `PLG-017`).** `[current]`
+- MAN-014: **A manifest and plugin that disagree on a capability name MUST
+  disable the plugin.** `[current]`
 
 ## 9.12 Host lifecycle and start-up
 
-- HST-001: **The host MUST load a bundle through one asynchronous entry that
-  verifies, extracts, validates the manifest, selects the target library, checks
-  the ABI, initialises, and registers; callers MUST NOT drive those steps
+- HST-001: **The host MUST load a bundle through one entry that may complete later and
+  that verifies, unpacks, validates the manifest, selects this platform's code, checks
+  the contract, initialises, and registers; callers MUST NOT drive those steps
   separately.** `[current]`
 - HST-002: **Start-up MUST scan a plugin directory: every regular file directly
-  in the directory is one bundle, named by its file stem, with no recursion and
-  no discovery file.** A directory entry that is not a regular file is skipped.
-  `[current]`
-- HST-003: **A bundle's identity before its manifest is read MUST be its file's
-  stem, and the daemon MUST resolve that bundle's configuration under that
+  in the directory is one bundle, with no recursion and no discovery file.** A
+  directory entry that is not a regular file is skipped. `[current]`
+- HST-003: **A bundle's identity before its manifest is read MUST be its file
+  name, and the daemon MUST resolve that bundle's configuration under that
   identity.** `[current]`
 - HST-004: **Once the manifest is readable, the manifest's name MUST become the
   registration and routing identity.** `[current]`
 - HST-005: **A trust failure, a bundle file that cannot be read from the
   filesystem, a plugin directory that cannot be listed, an absent, unreadable,
-  invalid, or name-mismatched manifest, and a refused unload MUST stop
+  invalid, or name-mismatched manifest, and a refused release MUST stop
   start-up.** `[current]`
-- HST-006: **A container this build cannot read, an extraction refusal, a missing
-  or ambiguous target library, a manifest that declares no library for this host
-  or one the bundle does not carry, an ABI mismatch, a capability-name
-  disagreement, and a refused registration MUST disable only that plugin while
-  the daemon runs.** `[current]`
-- HST-007: **A failed initialisation MUST unload the instance and replace it with
-  a disabled placeholder; a refused unload during that recovery MUST stop
+- HST-006: **A container this build cannot read, an unpacking refusal, a missing
+  or ambiguous code entry for this platform, a manifest that declares no code for
+  this platform or one the bundle does not carry, a contract mismatch, a
+  capability-name disagreement, and a refused registration MUST disable only that
+  plugin while the daemon runs.** `[current]`
+- HST-007: **A failed initialisation MUST release the instance and replace it with
+  a disabled placeholder; a refused release during that recovery MUST stop
   start-up.** `[current]`
 - HST-008: **A disabled plugin MUST be listed with its name, the reason, and its
-  capabilities when a manifest was readable, or with the bundle file stem and no
+  capabilities when a manifest was readable, or with the bundle's file name and no
   capabilities when one was not.** `[current]`
 - HST-009: **A disabled plugin's capabilities MUST be excluded from what an agent
   context is offered.** `[current]`
@@ -427,26 +425,26 @@ choices.
 - HST-011: **There MUST be no live reconfiguration: a plugin MUST NOT observe two
   different configurations in one lifetime (see `DAE-015` and `CFG-005`).**
   `[current]`
-- HST-012: **Releasing an instance MUST be one awaited entry that unregisters the
-  instance, cancels or drains in-flight calls to the caller's deadline, calls the
-  plugin's shutdown entry, drops every future, destroys the instance, unloads the
-  library, and reports the lifecycle entries it added.** `[current]`
-- HST-013: **A library MUST be unloaded only when nothing is inside plugin code
-  and every future and waker clone has been dropped.** `[current]`
-- HST-014: **An instance that cannot be released MUST stay mapped and MUST be
-  reported; the host MUST NOT unmap a library that may still be running.**
+- HST-012: **Releasing an instance MUST be one awaited operation that unregisters
+  the instance, cancels or drains in-flight calls to the caller's deadline, calls
+  the plugin's shutdown operation, drops every pending result, destroys the
+  instance, releases the plugin's code, and reports the lifecycle entries it
+  added.** `[current]`
+- HST-013: **Plugin code MUST be released only when no call, pending result,
+  completion handle, or callback can still run in it.** `[current]`
+- HST-014: **An instance that cannot be released MUST stay resident and MUST be
+  reported; the host MUST NOT release code that may still be running.**
   `[current]`
 - HST-015: **The daemon's shutdown MUST be bounded by a deadline; on expiry it
-  MUST report which instances could not be released and exit, leaving those
-  libraries mapped.** `[current]`
-- HST-016: **A plugin whose abandoned poll never returns MUST be quarantined: it
-  accepts no new futures, its library stays resident, and its recorded lifecycle
-  state stays accurate.** `[current]`
-- HST-017: **There MUST be no fixed waiting period for unloading; quarantine plus
-  a reclaim on the abandoned poll's return MUST be the mechanism.**
-  `[current]`
-- HST-018: **Hot unloading, meaning replacing a mapped library while the daemon
-  runs, MUST NOT be provided.** `[current]`
+  MUST report which instances could not be released and exit, leaving that code
+  resident.** `[current]`
+- HST-016: **A plugin whose abandoned query never returns MUST be quarantined: it
+  accepts no new pending results, its code stays resident, and its recorded
+  lifecycle state stays accurate.** `[current]`
+- HST-017: **There MUST be no fixed waiting period for release; quarantine plus a
+  reclaim on the abandoned query's return MUST be the mechanism.** `[current]`
+- HST-018: **Hot replacement of plugin code while the daemon runs MUST NOT be
+  provided.** `[current]`
 - HST-019: **The host MUST record an ordered lifecycle ledger per instance, from
   load through call, cancellation, and teardown.** `[current]`
 - HST-020: **The host MUST report which plugins it could not release at shutdown,
@@ -456,22 +454,22 @@ choices.
 
 - HST-021: **The caller that starts a plugin call MUST own its deadline; the
   runtime MUST hold no timer and no default deadline.** `[current]`
-- HST-022: **Cancellation MUST mark the call's token through the frozen entry, and
-  the plugin MUST be expected to resolve the call as cancelled on its next
-  poll.** `[current]`
+- HST-022: **Cancellation MUST mark the call's token, and the plugin MUST be
+  expected to resolve the call as cancelled on its next result query.**
+  `[current]`
 - HST-023: **Cancelling a request identifier the host does not hold MUST answer
   not found without calling the plugin.** `[current]`
 - HST-024: **An unacknowledged cancellation MUST be recorded on the ordering
   ledger, and the instance MUST keep serving.** `[current]`
-- HST-025: **Dropping a call MUST release every plugin buffer the host still holds
-  for that call and MUST cancel that call's outstanding service requests before
-  the context is reclaimed, so no completion is delivered into a released
+- HST-025: **Dropping a call MUST release every plugin payload the host still
+  holds for that call and MUST cancel that call's outstanding service requests
+  before the context is reclaimed, so no completion is delivered into a released
   context.** `[current]`
 - HST-026: **A call the plugin resolves as cancelled MUST reach its caller as the
   cancelled status; a call the caller dropped MUST yield nothing to that
   caller.** `[current]`
 - HST-027: **Instance-wide cancellation MUST be a host-side pass over the
-  instance's own in-flight set, and MUST NOT add a plugin table entry.**
+  instance's own in-flight set, and MUST NOT add a plugin-side operation.**
   `[current]`
 
 ## 9.14 The sink
@@ -484,12 +482,12 @@ choices.
   requests MUST also name the request identifier, an event MUST carry its topic
   and payload, and a log MUST carry its level and message.** `[current]`
 - HST-031: **A payload MUST reach the sink as an owned copy taken before the
-  plugin's buffer is released, so the sink never holds a reference into plugin
-  memory.** `[current]`
+  plugin's payload is released, so the sink never holds plugin-owned state.**
+  `[current]`
 - HST-032: **A sink method MUST be infallible and MUST NOT block, because it is
-  called inside the plugin's poll frame.** `[current]`
-- HST-033: **A panic inside a sink MUST be caught in its own frame and recorded on
-  the ordering ledger.** `[current]`
+  called from inside the plugin's result query.** `[current]`
+- HST-033: **An unexpected failure inside a sink MUST be contained at that
+  boundary entry and recorded on the ordering ledger.** `[current]`
 - HST-034: **Delivery MUST be ordered per instance and in emission order; there
   MUST be no ordering relationship between callbacks from different instances,
   and no promised position relative to a call's completion.** `[current]`
@@ -498,56 +496,58 @@ choices.
 - HST-036: **A sink MUST NOT call back into the runtime or the plugin.**
   `[current]`
 - HST-037: **A service request MUST be accepted or refused synchronously by the
-  sink and answered later through the runtime's service-completion entry.**
+  sink and answered later through the runtime's service-completion operation.**
   `[current]`
-- HST-038: **The host MUST strip the payload envelope before delivering a body to
-  the sink.** `[current]`
+- HST-038: **The host MUST strip the payload's declared format version before
+  delivering a body to the sink.** `[current]`
 
 ## 9.15 Error surface and evidence obligations
 
 - HST-039: **Load and dispatch failures, routing and validation failures, and
-  registration failures MUST be distinct typed errors, and staleness, ABI
+  registration failures MUST be distinct typed errors, and staleness, contract
   mismatch, and trust failure MUST be three distinct typed refusals.**
   `[current]`
-- HST-040: **A bundle's bytes MUST be checked against committed test vectors so a
-  second implementation can be validated against the same rules.**
-  `[current]`
+- HST-040: **The host's bundle reader MUST be exercised against committed fixtures
+  that cover every refusal class, so a change to the reader is checked against
+  them.** `[current]`
 - HST-041: **A reference plugin MUST be packaged into a signed bundle and loaded
-  end to end through the same host entry as any other bundle, so the format is
-  proved by a real load rather than by a library seam alone.** `[current]`
-- HST-042: **The test signing key MUST NOT be a compiled-in trust root, and the
+  end to end through the same host entry as any other bundle, so the contract is
+  proved by a real load rather than by a seam alone.** `[current]`
+- HST-042: **The test signing key MUST NOT be a compiled-in trust anchor, and the
   tests that use it MUST install it explicitly.** `[current]`
-- HST-043: **The host-facing hand-off frames SHOULD be asserted panic-free at
-  build time where the toolchain can prove it.** Disregarding this recommendation
-  leaves unwinding across the boundary checked only by per-frame catches. This is
-  a verification obligation, not a substitute for the per-frame catch.
-  `[current]`
+- HST-043: **The boundary hand-offs SHOULD be asserted correct at build time
+  where the toolchain can prove the property; where it cannot, a runtime check
+  MUST cover the same property.** Which properties are worth proving, and with
+  what, is open (`OQ-112`). Disregarding this recommendation leaves the boundary
+  checked only at each boundary entry. This is a verification obligation, not a
+  substitute for the handling at each entry. `[current]`
 
 ## 9.16 Plugin authoring SDK, core plugins, and CLI
 
 - SDK-001: **The application MUST ship a first-class authoring SDK for the
   language its own core plugins are written in, because those plugins exercise
-  the SDK rather than reaching past it.** The current language is Rust. The C ABI
-  remains the language-neutral integration surface. `[planned]`
-- SDK-002: **The SDK MUST add the serialisation and asynchronous scheduling
-  helpers a plugin needs, and MUST keep them out of the host runtime's dependency
+  the SDK rather than reaching past it.** The authoring language and the SDK's
+  distribution are open (`OQ-057`). `[planned]`
+- SDK-002: **The SDK MUST add the serialisation and deferred-completion helpers a
+  plugin needs, and MUST keep them out of the host runtime's dependency
   footprint.** `[planned]`
 - SDK-003: **SDK functionality MUST be separated so that export helpers,
-  serialisation, and async scheduling do not weigh down the host runtime.**
+  serialisation, and deferred-completion helpers do not weigh down the host
+  runtime.** `[planned]`
+- SDK-004: **The SDK MUST NOT change the boundary contract, and the host runtime
+  MUST be usable without the SDK.** `[planned]`
+- SDK-005: **The authored plugin surface MUST offer one fallible initialisation
+  that may complete later and that constructs and initialises the plugin, so a
+  plugin value that has not completed initialisation is not representable.**
   `[planned]`
-- SDK-004: **The SDK MUST NOT change the ABI, and the host runtime MUST be usable
-  without the SDK.** `[planned]`
-- SDK-005: **The authored plugin surface MUST offer one asynchronous, fallible
-  initialisation that constructs and initialises the plugin, so a plugin value
-  that has not completed initialisation is not representable.** `[planned]`
 - SDK-006: **The authored plugin surface MUST offer one capability-name-routed
   call, so the number of capabilities a plugin can declare is not bounded by the
   authoring surface.** `[planned]`
-- SDK-007: **The SDK MUST own the waker bridge between the host waker and the
-  language's future abstraction, the boxed-future helper, panic containment at
-  poll and drop, consuming the ready buffer on the poll return, cancellation
-  mechanics, schema derivation, typed facades, and serialisation helpers.**
-  `[planned]`
+- SDK-007: **The SDK MUST own the completion-handle bridge between the host and
+  the language's own concurrency abstraction, the pending-result helper, unexpected
+  failure containment at query and drop, consuming the ready payload on the query
+  return, cancellation mechanics, schema derivation, typed facades, and
+  serialisation helpers.** `[planned]`
 - SDK-008: **Per-capability typed facades MAY be generated from schemas; they MUST
   NOT become a constraint on the core authoring surface.** `[planned, form open]`
 - SDK-009: **A set of core plugins MUST ship with Metis and MUST exercise the SDK
@@ -560,8 +560,8 @@ choices.
   `[planned, form open]`
 - SDK-012: **The CLI MUST produce only the bundle format the host accepts; it MUST
   NOT invent a second format.** `[planned]`
-- SDK-013: **Other languages MUST be able to implement the C ABI directly; the SDK
-  is one authoring path, not a requirement.** `[current]`
+- SDK-013: **Other languages MUST be able to implement the boundary contract
+  directly; the SDK is one authoring path, not a requirement.** `[current]`
 - SDK-014: **The manifest MUST be generated from the same source as the plugin's
   own capability declaration where the SDK is used, and the hand-authored
   equivalent MUST stay documented and practical.** `[current]`
@@ -578,5 +578,5 @@ choices.
 - Plugins provide tools, model providers, and hooks. They do not define workflow
   step types.
 - Sandboxing, resource limits, and any claim that a plugin is safe to run are out
-  of scope. The ABI is not a sandbox.
-- Hot unloading is out of scope.
+  of scope. The boundary contract is not a sandbox.
+- Hot replacement of plugin code is out of scope.

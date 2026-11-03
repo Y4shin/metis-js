@@ -1,140 +1,146 @@
 # 12. External interfaces and compatibility constraints
 
-This section records the names and encodings that an operator, a surface, or a
-third-party plugin author depends on. A different implementation can change its
-internal architecture freely. The operator settings, paths, access rules, plugin
-ABI names, bundle bytes, and manifest fields are requirements: changing one is a
-compatibility change and requires a deliberate versioned migration. The network
-metadata spellings and the token encoding in sections 12.3 and 12.7 are the
-current realization; a new implementation can change them if it preserves the
-semantic requirements they carry and does not need to interoperate with an
-existing client.
+This section states what an implementation must keep stable because an operator, a
+surface, or a plugin author depends on it. It names no spelling. Every name, path,
+format, and encoding below is a decision the implementation makes and records; the
+decision is opened in `15-open-questions.md`, and the requirement here is the
+property the decision must preserve. A different implementation can choose
+differently and still satisfy this specification.
+
+Two rules govern every item in this section:
+
+- The implementation MUST document each of these surfaces where an operator, a
+  plugin author, or a surface author can read it.
+- Changing a documented surface is a compatibility change. It MUST be introduced
+  as a new version or through a documented migration, never by silent drift
+  (`CMP-001` to `CMP-006`).
 
 ## 12.1 Operator-facing settings
 
-| Setting | Meaning |
+The daemon MUST expose one setting for each of these meanings. The setting names
+are open (`OQ-116`).
+
+| Meaning | Required behavior |
 | --- | --- |
-| `METIS_ENDPOINT` | Local endpoint override. An absent or empty value means the platform default. On Windows it names the pipe. |
-| `METIS_SOCKET_GROUP` | Unix socket group. The named group exists and the daemon's user can use it; the socket and directory then use mode 770. Absent means mode 700 and no group. |
-| `METIS_TCP_ADDR` | Remote bind address as an `IP:port` literal. Absent or empty disables the listener. No default. |
-| `METIS_TRUSTED_PROXIES` | Comma-separated exact proxy IP addresses. Absent or empty trusts no proxy. |
-| `METIS_PRESHARED_KEY` | Pairing secret, written as a secret reference. Absent or empty closes pairing. |
-| `METIS_STATE_DB` | Persistent state location. Absent or empty falls back to the data-home path. |
+| Local endpoint override | Wins over the platform default; absent or empty means the default. |
+| Local endpoint group | Names an existing group; absent means owner-only access and no group. |
+| Remote bind address | An address literal and a port; absent or empty disables the listener and there is no default. |
+| Trusted proxies | Exact proxy addresses; absent or empty trusts no proxy. |
+| Pairing secret | A secret reference; absent or empty closes pairing. |
+| State location | A dedicated location; absent or empty means the platform's per-user data location. |
 
-Secret reference forms:
+A secret value MUST be resolvable from a literal, an environment reference, a
+platform credential-store reference, or a permission-checked file reference
+(`CFG-006`). The syntax that expresses these forms is open (`OQ-117`). The
+implementation MUST document the authoritative form; an earlier form is
+superseded rather than silently accepted (`CMP-005`).
 
-| Form | Meaning |
-| --- | --- |
-| `<value>` or `literal:<value>` | The value is the secret. A bare value is a literal, including a value that contains a colon. |
-| `env:<NAME>` | Read environment variable `NAME`. |
-| `keystore:<account>` | Read the platform keychain through its command-line tool under the service name `metis-daemon`. |
-| `file:<path>` | Read a file that only its owner can read. |
-
-These spellings are the external configuration surface. Earlier draft forms are
-superseded by the forms above.
-
-## 12.2 Paths and access rules
+## 12.2 Locations and access rules
 
 | Item | Rule |
 | --- | --- |
-| Local Unix endpoint default | `$XDG_RUNTIME_DIR/metis/daemon.sock`, else `$TMPDIR/metis/daemon.sock`, else a typed refusal. |
-| Local Windows endpoint default | `\\.\pipe\metis-daemon`, prefix `\\.\pipe\` required, at most 256 characters, no interior NUL. |
-| Socket directory and socket | Mode 700, or 770 with a configured group, owned by the daemon's user. |
-| Persistent state | `$XDG_DATA_HOME/metis/metis.db`, else `$HOME/.local/share/metis/metis.db`, directory mode 700, file mode 600. |
-| Client credential file | `$XDG_DATA_HOME/metis/client/<surface>.token`, else under `$HOME/.local/share/metis/client/`, file mode 600 inside a directory mode 700. |
-| Plugin directory | A directory of bundle files scanned by the daemon. The exact path is not fixed by this specification and is open. |
+| Local endpoint | A private, per-user runtime location. No shared or world-accessible location is acceptable. |
+| Local endpoint access | Owner-only, or owner-and-group when a group is configured. Where the endpoint is a filesystem object, a pre-existing path that is a symbolic link, is not a directory, is owned by another user, or is wider than the rule is refused, never repaired (`NET-006`). |
+| Persistent state | One durable store inside a per-user data location, restricted to the daemon's user (`CFG-011`, `CFG-012`). |
+| Client credential file | Owner-only, inside an owner-only directory, where the platform expresses access as permissions (`AUT-035`). |
+| Plugin directory | A directory whose regular files are bundles, one bundle per file, scanned without recursion (`HST-002`). Its path is open (`OQ-020`, `OQ-095`). |
 
-## 12.3 Wire metadata and refusal channels
+The exact default paths and their spellings are open (`OQ-116`). A default path
+that leaves the user's private area is a defect, not a choice.
 
-The current contract uses these metadata names. Their meanings are requirements
-(`API-007`, `API-008`, `IDN-001` to `IDN-004`); the spellings are the current
-realization. A new implementation can choose different metadata spellings if it
-preserves those meanings and does not need to interoperate with an existing
-client.
+## 12.3 Call identity and refusal carriers
 
-| Name | Direction | Meaning |
+Every client call MUST carry the surface identity declaration of `IDN-001`, and
+every authenticated call MUST carry its credential with the call rather than in
+its address, in anything a proxy records, or in a log line (`API-017`, `AUT-027`,
+`AUT-028`, `INV-030`).
+
+The contract MUST define, for each side of a call:
+
+| Meaning | Requirement |
 | --- | --- |
-| `metis-protocol-version` | request | Protocol version the client speaks. Current supported version is 1. |
-| `metis-surface` | request | Surface class: the current clients send `cli`, `ui`, `test`, or `unspecified`; the daemon records any declared name as descriptive data. |
-| `metis-client-version` | request | Client version string for diagnostics. |
-| `metis-supported-versions` | response | Comma-separated supported protocol versions on a version refusal. |
-| `authorization` | request | `Bearer <token>`. |
-| `metis-auth-error` | response | Credential refusal cause: missing, invalid, or revoked. |
-| `metis-pair-error` | response | Pairing refusal: `disabled`, `wrong-key`, or `already-paired`. |
-| `metis-cursor-error` | response | Cursor refusal: `expired`. |
-| `metis-stream-error` | stream trailer | Terminal stream refusal: `slow-consumer` or `cancelled`. |
-| `metis-request-id` | request and response | Client-generated opaque correlation identifier, at most 64 printable ASCII characters with no space, echoed verbatim. |
+| Protocol version | Sent by the client, checked by the daemon, refused when absent, malformed, or unsupported (`IDN-002`). |
+| Supported versions | Named in a version refusal so the client reads them without parsing message text (`IDN-003`). |
+| Surface name and client version | Descriptive, recorded for diagnostics, never an authorization (`IDN-005`, `IDN-006`). |
+| Credential | Present on every authenticated call, including the event stream (`AUT-027`). |
+| Request identifier | Optional, opaque, echoed verbatim, bounded as `CAN-002` requires (`CAN-001`, `CAN-004`, `CAN-005`). |
+| Refusal cause | Machine-readable, so a client maps it to a typed error without parsing message text (`API-007`, `API-008`). |
 
-`API-007` requires a client to interpret a refusal without parsing human-readable
-message text. The table above is one realization of that requirement.
+The carrier names and the encoding of these values are open (`OQ-118`).
 
 ## 12.4 Event contract
 
 | Item | Rule |
 | --- | --- |
-| Channels | `daemon`, `session:<id>`, `task:<id>`, `workflow_run:<id>`. |
-| Event fields | Identifier, kind, channel, payload. |
-| Kinds | Unspecified, snapshot, heartbeat, ordinary event. |
-| Identifier | Daemon-wide monotonic integer starting at 1. |
-| Cursor | Request field `last_event_id`; 0 means no cursor. |
-| Payload encoding (current) | JSON text in a text field. |
+| Channels | One covering daemon-wide events, one per session, one per task, one per workflow run. Naming is open (`OQ-119`). |
+| Event fields | Identifier, kind, channel, payload (`RTS-008`). |
+| Kinds | Unspecified, snapshot, heartbeat, ordinary event (`RTS-010`). |
+| Identifier | Daemon-wide monotonic integer starting at 1 (`RTS-009`). |
+| Cursor | Carried on the stream request; zero means no cursor (`RTS-003`). |
+| Payload | Opaque to the stream machinery; its encoding is a versioned contract change (`RTS-014`). |
 
-Changing the payload encoding is a breaking contract change governed by `CMP-004`
-and section 12.8.
+Changing the payload encoding or a channel name is a breaking contract change
+governed by `CMP-004`. The payload encoding is open (`OQ-119`).
 
-## 12.5 Plugin ABI names and encodings
+## 12.5 Plugin boundary contract
 
-These are external because a plugin in any language can implement them.
-
-| Item | Rule |
-| --- | --- |
-| Entry symbol | `metis_plugin_entry_v1`; exactly one exported `metis_*` symbol. |
-| ABI major / minor | 1 / 2. Minor is additive: a host accepts a plugin minor at or above its own within major 1. |
-| Plugin table | Size, ABI major, ABI minor, initialise, destroy, list capabilities, invoke, cancel, release buffer, shutdown, service complete. |
-| Host table | Size, host state, progress, emit event, log, service request. |
-| Statuses | Ok = 0, InvalidArgument = 1, NotFound = 2, PermissionDenied = 3, Cancelled = 4, Internal = 5, Unsupported = 6, Pending = 7. |
-| Buffer | Pointer, length, capacity, owner (none, host, plugin), reserved. |
-| Payload envelope | Bits 0 to 3: format version 1. Bit 4: codec, 0 = JSON. Bits 5 to 7: reserved, zero. |
-| Log levels | 0 debug, 1 info, 2 warn, 3 error. |
-
-## 12.6 Bundle and manifest format
+The boundary is external because a plugin author in any language can implement it
+(`SDK-013`). Its concrete shape is open (`OQ-104`); its observable rules are:
 
 | Item | Rule |
 | --- | --- |
-| File extension | `.metis`. |
-| Header | 40 bytes, big-endian: magic `METISBND`, container version 1, signing suite 1, header length 40, reserved 0, chain length, signature offset, signature length, ZIP length. |
-| Domain tag | `METIS-PLUGIN-BUNDLE-PAYLOAD` (27 ASCII bytes). |
-| Signature | Raw Ed25519, 64 octets. |
-| Chain | DER X.509 v3; leaf first, anchor last; at most 8 links; canonical DER only. |
-| Key identifier | First 16 bytes of SHA-256 over the raw 32-byte public key. |
-| Archive | ZIP; `manifest.toml` at the root; `lib/<target>/<file>`; one file per target directory. |
-| Limits | 256 entries; 64 MiB per entry; 256 MiB total declared uncompressed size. |
-| Declared entry mode | `0600`, or no declared mode; anything else refused. |
-| Manifest fields | `name`, `version`, `abi_major`, `min_abi_minor`, `libraries`, `capabilities[]` with `name`, `kind`, `version`, `request_schema`, `response_schema`, and `config_schema`. |
-| Capability kinds | `tool`, `provider`. |
+| Entry | Exactly one entry point, through which the host obtains every other operation (`PLG-010`). |
+| Compatibility | The major is decided before anything else is used; within a major the operation set is append-only and a newer minor is tolerated while an older one is refused (`PLG-011` to `PLG-014`). |
+| Extent | Both directions declare their extent, and an operation is used only when the declared extent covers it (`PLG-012`). |
+| Operations | Initialisation that may complete later, destruction, capability listing, invocation, cancellation, payload release, shutdown, and service completion (`PLG-019`). |
+| Status space | The frozen status set of `PLG-045`; higher layers add meaning, not values. |
+| Ownership | Each side releases only what it owns; plugin-owned payloads are released only through the plugin's release operation (`PLG-046` to `PLG-052`). |
+| Completion | A pending result is driven by the host and completed through a completion handle the plugin may take further uses of and must release (`PLG-036` to `PLG-044`). |
+| Payloads | Every payload declares its format version; an unknown version is unsupported and a malformed payload is invalid (`PLG-053`, `PLG-054`). |
+| Publication | The contract's constants and per-operation rules are published in a form any language can implement from (`PLG-056`). |
+
+The contract's version numbers are open (`OQ-111`). The completion handshake and
+cancellation are open (`OQ-105`), as is the payload encoding (`OQ-106`).
+
+## 12.6 Bundle and manifest
+
+| Item | Rule |
+| --- | --- |
+| Artifact | Exactly one file per plugin, carrying a signed container, the manifest, and the code (`BND-001`). |
+| Signature | Covers every byte a user installs, with the signature itself excluded (`BND-004`, `INV-021`). |
+| Trust | Anchored in a configured trust store and its revocations; the compiled-in set is empty (`BND-009` to `BND-016`, `SEC-006`). |
+| Refusal classes | A trust failure stops start-up; a container refusal disables one bundle (`BND-017`, `BND-018`). |
+| Unpacking | Validates every entry, makes available only this platform's code, refuses path escape and non-regular entries, and applies the declared limits (`BND-024` to `BND-034`). |
+| Manifest | Declares identity, version, contract demand, code per platform, capabilities with schemas, and the configuration schema (`MAN-002`). |
+| Validation order | Presence, readable format, name, contract demand, then code for this platform (`MAN-007`). |
+
+The container and archive format are open (`OQ-107`); the signature and trust
+mechanism are open (`OQ-108`); the manifest's format and field names are open
+(`OQ-109`); the schema dialect is open (`OQ-110`).
 
 ## 12.7 Credential encoding
 
-- A token is opaque text. The current implementation mints 32 random bytes as 64
-  lowercase hexadecimal characters.
-- The current implementation stores the SHA-256 of the token's canonical
-  lowercase hexadecimal text, not of the decoded bytes. This is a realization
-  detail, not a requirement. `AUT-040` requires an implementation that adopts an
-  existing state directory to keep paired surfaces working or migrate them
-  deliberately.
-- A request identifier generated by the client is random and unique per stream.
-  The current implementation uses 16 random bytes as 32 lowercase hexadecimal
-  characters. Only the 64-character printable-ASCII bound with no space is
-  normative (`CAN-002`).
+- A token is opaque text. Its length and alphabet are open (`OQ-120`).
+- The daemon stores only an irreversible function of the token, never the token
+  itself, and MUST NOT be able to return it again (`AUT-013`, `AUT-014`). The
+  function is open (`OQ-120`).
+- An implementation that adopts an existing state directory MUST keep previously
+  paired surfaces working or migrate their credentials deliberately (`AUT-040`).
+- A client-generated request identifier is opaque, at most 64 printable
+  characters with no space, and unique per stream (`CAN-002`, `CAN-003`). Its
+  form is open (`OQ-123`).
 
 ## 12.8 Protocol compatibility
 
-- The protocol major version is part of the contract's versioned identity
+- The protocol major version MUST be part of the contract's versioned identity
   (`API-005`).
 - `API-004` requires an automated compatibility check to reject an unintentional
   breaking contract change. A deliberate breaking change is introduced as a new
   major version or as a documented migration.
-- `CMP-005` and `CMP-006` require the plugin ABI major, the bundle container
-  version, the plugin's own version, and the network protocol version to remain
-  independent compatibility axes, and require existing paired surfaces to keep
-  working or be migrated.
+- `CMP-005` and `CMP-006` require the plugin contract's version, the bundle
+  container version, the plugin's own version, and the network protocol version to
+  remain independent compatibility axes, and require existing paired surfaces to
+  keep working or be migrated.
+
+The protocol the implementation uses is open (`OQ-022`), and so is the
+remote listener and the way forwarded client information arrives (`OQ-115`).

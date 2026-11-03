@@ -5,15 +5,16 @@ sees; it does not prescribe how the daemon stores or schedules events.
 
 ## 8.1 Event stream operation
 
-- RTS-001: **The daemon MUST expose the event stream as one server-streaming
-  operation that the client can open over any transport.** `[current]`
+- RTS-001: **The daemon MUST expose the event stream as one long-lived operation
+  that the client can open over any transport.** `[current]`
 - RTS-002: **The stream request MUST select one or more channels.** `[current]`
 - RTS-003: **The stream request MUST carry a cursor; zero MUST mean "no
   cursor".** `[current]`
 - RTS-004: **A stream that selects no channel MUST deliver no channel's
   events.** `[current]`
-- RTS-005: **The documented channels MUST be `daemon`, `session:<id>`,
-  `task:<id>`, and `workflow_run:<id>`.** `[current]`
+- RTS-005: **The documented channels MUST cover daemon-wide events, events for
+  one session, events for one task, and events for one workflow run.** The
+  channel naming scheme is open (`OQ-119`). `[current]`
 - RTS-006: **The daemon MUST treat a channel named twice in one selection as one
   channel.** `[current]`
 - RTS-007: **The daemon MUST refuse a request that presents a cursor the event
@@ -37,10 +38,10 @@ sees; it does not prescribe how the daemon stores or schedules events.
   the identifier space again and MUST expire every cursor.** `[current]`
 - RTS-013: **The event stream MUST NOT be treated as the source of truth for
   application state.** `[current]`
-- RTS-014: **The current contract carries the event payload as JSON text in a
-  text field; the payload MUST remain opaque to the stream machinery, and
-  changing its encoding is a breaking contract change governed by `12.4` and
-  `CMP-004`.** `[current]`
+- RTS-014: **The event payload MUST remain opaque to the stream machinery, so a
+  change to its encoding is a breaking contract change governed by `CMP-004`
+  rather than a change to the stream.** The payload encoding is open (`OQ-119`).
+  `[current]`
 
 ## 8.3 Stream opening: snapshot and resume
 
@@ -116,12 +117,13 @@ sees; it does not prescribe how the daemon stores or schedules events.
 - CAN-001: **A client call MAY declare an opaque request identifier; a call that
   declares none MUST be served as before, and it is not cancellable.**
   `[current]`
-- CAN-002: **A request identifier MUST be at most 64 printable ASCII characters,
-  with no space, so that it is header-safe.** `[current]`
+- CAN-002: **A request identifier MUST be at most 64 printable characters,
+  with no space, so that it is safe to carry with a call.** Its form is open
+  (`OQ-123`). `[current]`
 - CAN-003: **The client MUST generate a fresh identifier for each stream it opens,
   so that two streams from one client never share an identifier.** `[current]`
 - CAN-004: **The daemon MUST echo a declared request identifier verbatim in the
-  response metadata.** `[current]`
+  call's answer.** `[current]`
 - CAN-005: **The daemon MUST echo a declared request identifier verbatim,
   including a malformed one, and MUST NOT refuse a call only because the
   identifier is malformed.** `[current]`

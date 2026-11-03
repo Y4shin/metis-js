@@ -20,6 +20,7 @@
   of any connected surface.** `[current]`
 - DAE-010: **All exposed transports MUST serve the same API behavior and the
   same schema.** `[current]`
+- DAE-011: Retired. This identifier is not reused.
 - DAE-012: **The daemon MUST own plugin discovery, plugin configuration delivery,
   and the trust policy it hands to the plugin host.** `[current]`
 - DAE-013: **The plugin host MUST NOT read the daemon's configuration files.**
@@ -38,8 +39,8 @@
 - API-001: **The daemon's API MUST be defined by a versioned, language-neutral,
   schema-first contract that is the single source of truth for both client and
   server.** `[current]`
-- API-002: **The contract MUST support ordinary request-response calls and
-  server-streaming calls.** `[current]`
+- API-002: **The contract MUST support calls that return one answer and calls
+  that keep returning answers until they are closed.** `[current]`
 - API-003: **The contract MUST be free of concepts that only one implementation
   language can consume.** `[current]`
 - API-004: **The contract MUST have a compatibility guarantee: an unintentional
@@ -61,10 +62,9 @@
   cursor, ordering, cancellation, resume, expiry, and slow-consumer handling; a
   schema alone is not sufficient.** `[current]`
 
-The current realization uses Protobuf definitions under a versioned package and
-ConnectRPC over HTTP semantics. That choice is one realization and is not a
-requirement of this specification. A different realization preserves the
-observable contract stated above.
+The protocol and its encoding are not fixed by this specification. The
+requirements above state the observable behavior; the wire protocol, its schema
+language, and its encoding are open (`OQ-022`).
 
 ## 6.3 The client
 
@@ -72,10 +72,10 @@ observable contract stated above.
   component that every surface uses to reach the daemon.** `[current]`
 - API-011: **The client MUST expose one caller-facing API across all transports,
   so that a surface does not branch on the transport.** `[current]`
-- API-012: **The client MUST carry the per-surface credential as request metadata
-  on every call, including the event stream.** `[current]`
-- API-017: **The client MUST NOT place a credential in a URL or a query string.**
-  `[current]`
+- API-012: **The client MUST carry the per-surface credential with every call,
+  including the event stream.** `[current]`
+- API-017: **The client MUST NOT place a credential in the call's address or in
+  any part of it that a proxy or a log records.** `[current]`
 - API-013: **The client MUST expose a stream from a cursor and MUST report an
   expired cursor as a distinct error so that the caller can resync.** `[current]`
 - API-014: **The client MUST NOT hide a retry or a resync inside the wrapper; the
@@ -87,36 +87,36 @@ observable contract stated above.
 
 ## 6.4 Local transports
 
-- NET-001: **On Linux and macOS, the daemon MUST offer local access over a Unix
-  domain socket, and the client MUST reach it there by default.** `[current]`
-- NET-002: **On Windows, the daemon MUST offer local access over a duplex,
-  byte-mode named pipe, and the client MUST reach it there by default.**
-  `[current, compile-verified only]`
+- NET-001: **On Linux and macOS the daemon MUST offer local access without
+  opening a network port, and the client MUST reach it there by default.** The
+  concrete local transport is open (`OQ-114`). `[current]`
+- NET-002: **On Windows the daemon MUST offer local access that rejects remote
+  callers, and the client MUST reach it there by default.** The concrete local
+  transport is open (`OQ-114`). `[current, compile-verified only]`
 - NET-003: **The local transport MUST carry the same API contract as any other
   transport, with no second message set or handler.** `[current]`
-- NET-004: **The daemon MUST create the local endpoint's directory and restrict
-  it to the daemon's user, applying the configured group when one is set.**
-  `[current]`
-- NET-005: **On Unix-like systems, the daemon MUST apply mode 700 to the socket
-  directory and socket when no group is configured, and mode 770 when a group is
-  configured.** `[current]`
-- NET-006: **On Unix-like systems, the daemon MUST refuse a pre-existing endpoint
-  directory that is a symbolic link, is not a directory, is owned by another
-  user, or carries a wider mode than the rule allows, and MUST NOT chmod or chown
+- NET-004: **The daemon MUST create the local endpoint and restrict it to the
+  daemon's own user before it accepts a call, applying the configured group where
+  the platform supports one.** `[current]`
+- NET-005: **Where the local endpoint is a filesystem object and the platform
+  expresses access as permissions, the endpoint and its directory MUST use
+  owner-only permissions when no group is configured, and owner-and-group
+  permissions when one is configured.** `[current]`
+- NET-006: **Where the local endpoint is a filesystem object, the daemon MUST
+  refuse a pre-existing path that is a symbolic link, is not a directory, is
+  owned by another user, or is wider than the rule allows, and MUST NOT repair
   such a path.** `[current]`
-- NET-007: **On Unix-like systems, the configured socket group MUST be an
-  existing group; an unknown group name MUST be refused rather than replaced by
-  the daemon's primary group.** `[current]`
-- NET-008: **On Windows, every pipe instance MUST carry a security descriptor
-  that grants full access to the daemon's own account and to Local System, denies
-  the network logon group, and carries no inherited access.** `[current,
-  compile-verified only]`
-- NET-009: **On Windows, the pipe MUST reject remote clients, because the access
-  control list alone does not prevent a remote caller that holds the daemon
+- NET-007: **A configured group MUST name an existing group; an unknown group
+  MUST be refused rather than replaced by the daemon's primary group.**
+  `[current]`
+- NET-008: **On Windows the local endpoint MUST grant access to the daemon's own
+  account and to the system account only, and MUST carry no inherited access.**
+  `[current, compile-verified only]`
+- NET-009: **On Windows the local endpoint MUST reject remote clients, because the
+  access rule alone does not prevent a remote caller that holds the daemon
   account's credentials.** `[current, compile-verified only]`
-- NET-010: **On Windows, the first pipe instance MUST claim first-instance
-  ownership so that a process already holding the name makes the daemon fail
-  loudly rather than share the pipe.** `[current, compile-verified only]`
+- NET-010: **On Windows the daemon MUST fail loudly rather than share its local
+  endpoint with a process that already holds it.** `[current, compile-verified only]`
 - NET-011: **The daemon MUST treat a local caller as authenticated by the
   operating system's access control and MUST NOT require a token for a local
   call.** `[current]`
@@ -126,14 +126,14 @@ observable contract stated above.
 ## 6.5 Remote transport
 
 - NET-013: **The daemon MUST expose a remote listener only when the operator
-  supplies a bind address, and MUST NOT define a default bind address.**
-  `[current]`
-- NET-014: **The bind address setting MUST accept an IP-and-port literal and MUST
-  refuse a hostname, an empty value acting as disabled, and a malformed value
-  with a typed configuration error that names the setting and the value.**
+  supplies a bind address, and MUST NOT define a default bind address.** The
+  listener's form is open (`OQ-115`). `[current]`
+- NET-014: **The bind address setting MUST name an address literal and a port,
+  and MUST refuse a hostname, an empty value acting as disabled, and a malformed
+  value with a typed configuration error that names the setting and the value.**
   `[current]`
 - NET-015: **The remote listener MUST be plaintext; the daemon MUST NOT terminate
-  TLS, present a certificate, or manage certificate material.** `[current]`
+  encryption or manage key material for it.** `[current]`
 - NET-016: **The remote listener MUST require a per-surface credential on every
   call, including the event stream.** `[current]`
 - NET-017: **The daemon MUST read forwarded information only from proxy addresses
@@ -141,10 +141,11 @@ observable contract stated above.
 - NET-018: **The daemon MUST trust no proxy implicitly, including loopback, and an
   absent or empty trusted-proxy setting MUST name no proxy.** `[current]`
 - NET-019: **When the peer is a trusted proxy, the daemon MUST read the left-most
-  entry of the forwarded-for header as the client address and MUST treat a
-  forwarded protocol value of `https` as an encrypted client leg; the daemon MUST
+  entry of the forwarded client address as the client address and MUST treat a
+  forwarded indication of an encrypted client leg as encrypted; the daemon MUST
   NOT walk a multi-hop forwarded chain.** `[current]`
-- NET-020: **Forwarded headers from an untrusted peer MUST be ignored.** `[current]`
+- NET-020: **Information a proxy forwards from an untrusted peer MUST be
+  ignored.** `[current]`
 - NET-021: **A forwarded client address that is not an IP literal MUST fall back
   to the peer address rather than be invented.** `[current]`
 - NET-022: **A malformed trusted-proxy entry MUST be a typed configuration error
@@ -161,55 +162,54 @@ observable contract stated above.
 
 ## 6.6 Endpoint and configuration resolution
 
-- CFG-001: **The local endpoint MUST resolve to `$XDG_RUNTIME_DIR/metis/daemon.sock`
-  when that variable is set and non-empty, otherwise to
-  `$TMPDIR/metis/daemon.sock` when that variable is set and non-empty, otherwise
-  to a typed "no private base" error.** `[current]`
+- CFG-001: **The local endpoint MUST resolve to a private, per-user runtime
+  location when the platform provides one, and otherwise MUST fail with a typed
+  "no private base" error rather than use a shared location.** `[current]`
 - CFG-002: **An endpoint override setting MUST win over the platform default, and
-  an absent or empty override MUST be treated as unset.** `[current]`
-- CFG-003: **On Windows, the local endpoint MUST default to
-  `\\.\pipe\metis-daemon`, and an override MUST start with the local pipe prefix
-  compared case-insensitively, MUST fit 256 characters, and MUST carry no
-  interior null character.** `[current, compile-verified only]`
-- CFG-004: **A malformed Windows pipe name MUST be a typed configuration error
+  an absent or empty override MUST be treated as unset.** The setting names and
+  default locations are open (`OQ-116`). `[current]`
+- CFG-003: **An endpoint override MUST be validated against the platform's
+  endpoint rules, and a value that names a non-local endpoint, or that the
+  platform cannot represent as a local endpoint, MUST be refused.**
+  `[current, compile-verified only]`
+- CFG-004: **An invalid endpoint override MUST be a typed configuration error
   naming the setting and the value, and MUST NOT fall back to the default.**
   `[current, compile-verified only]`
 - CFG-005: **Configuration MUST be read once at start-up, and changing it MUST
   require a restart (see `DAE-015`).** `[current]`
 - CFG-006: **A secret configuration value MUST be resolvable from a literal, an
-  environment variable reference, a platform keystore reference, or a secret file
-  reference.** `[current]`
+  environment variable reference, a platform credential-store reference, or a
+  secret file reference.** The reference syntax is open (`OQ-117`). `[current]`
 - CFG-007: **A secret file reference MUST be refused unless the file is readable
   by its owner and grants no access to group or others.** `[current]`
-- CFG-008: **A keystore reference MUST use the platform's keychain through its
-  command-line tool when that tool is available; a keychain that is present but
-  refuses MUST be an error, not a silent fallback to another source.**
-  `[current]`
+- CFG-008: **A credential-store reference MUST use the platform's credential store
+  when one is available; a store that is present but refuses MUST be an error,
+  not a silent fallback to another source.** `[current]`
 - CFG-009: **A configured secret reference that cannot be resolved MUST fail the
   daemon start-up that needs it with a typed error, and MUST NOT be treated as an
   absent secret.** `[current]`
 - CFG-010: **An empty secret MUST be treated as unresolved, not as a secret that
   an empty presentation can match.** `[current]`
 - CFG-011: **The daemon's persistent state MUST live in one durable store whose
-  directory is created at mode 700 and whose file is created at mode 600 on
-  Unix-like systems.** `[current]`
+  state is restricted to the daemon's user, using owner-only access where the
+  platform expresses access that way.** The store product is open (`OQ-122`).
+  `[current]`
 - CFG-012: **The state location MUST resolve from a dedicated setting when set
-  and non-empty, otherwise `$XDG_DATA_HOME/metis/metis.db`, otherwise
-  `$HOME/.local/share/metis/metis.db`, otherwise a typed "no state directory"
-  error.** `[current]`
+  and non-empty, otherwise from the platform's per-user data location, and
+  otherwise MUST fail with a typed "no state directory" error.** `[current]`
 - CFG-013: **A fresh installation MUST require no preparation step, and stored
   state from an earlier version MUST be upgraded automatically when the daemon
   opens it.** `[current]`
 - CFG-014: **The state store MUST NOT contain a token, a preshared key, or any
   other plaintext secret (see `AUT-014`).** `[current]`
 - CFG-015: **Configuration precedence across files, environment variables,
-  command-line flags, and native stores is unresolved.** An implementation's
+  command-line flags, and platform stores is unresolved.** An implementation's
   choice is a decision outside this specification. `[open]`
-- CFG-016: **The daemon's trust store MUST contain the root keys and key
-  revocations used to verify bundles, and the compiled-in default root set MUST
-  be empty so that a fresh installation trusts no third-party key.**
-  `[current]`
+- CFG-016: **The daemon's trust store MUST contain the trusted signing identities
+  and their revocations, and the compiled-in default set MUST be empty so that a
+  fresh installation trusts no third-party signer.** `[current]`
 
-The operator-facing setting names are part of the external interface and are
-recorded in `12-external-interfaces.md`. Their meanings above are requirements;
-renaming one is a breaking change for operators.
+The operator-facing setting names and default locations are an implementation's
+choice. They are a compatibility surface once shipped: renaming one, or moving a
+default location, is a breaking change for operators and needs a deliberate
+migration. `12-external-interfaces.md` states the rule.

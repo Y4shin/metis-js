@@ -25,9 +25,10 @@ workflow runs.
   context, tools, model selection, and execution budget instead of requiring one
   model to orchestrate the whole pipeline.** `[planned]`
 - WFL-008: **A script step MUST be runtime-provided and MUST execute an
-  author-supplied script in a restricted embedded language.** The current named
-  choice is Lua, because workflow authors write those scripts; the concrete
-  definition format and the execution environment remain open.
+  author-supplied script in a restricted embedded language.** The language, its
+  definition format, and its execution environment are open (`OQ-027`); the
+  specification fixes only that the script runs in a restricted environment and
+  reaches outside effects solely through declared tools.
   `[planned, form open]`
 - WFL-009: **A fan-in script step MUST declare multiple input ports and MUST NOT
   have tool access.** `[planned]`
@@ -35,6 +36,7 @@ workflow runs.
   `[planned]`
 - WFL-011: **A workflow run MUST expose progress, results, errors, and
   cancellation to its callers.** `[planned, form open]`
+- WFL-012: Retired. This identifier is not reused.
 
 ## 4.2 Connectors and routing
 
@@ -83,7 +85,7 @@ workflow runs.
 - WFL-029: **The runtime MUST NOT expose the full tool registry or an unrestricted
   dynamic tool lookup to a script step.** `[planned]`
 - WFL-030: **A script step MUST NOT reach the filesystem, network, processes, or
-  native libraries through script globals or imports; all of its external effects
+  host interfaces through its script environment; all of its external effects
   MUST go through its declared tool calls.** `[planned]`
 - WFL-031: **Tool dispatch from a script step MUST enforce the agent context's
   permissions independently of the declared dependency list.** `[planned]`
