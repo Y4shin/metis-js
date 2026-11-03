@@ -3,7 +3,7 @@ type: task
 subtype: grilling
 title: Settle the non-negotiables of implementing docs/spec/ across spawned efforts
 status: stable
-workflow_state: ready
+workflow_state: done
 blocked_by: []
 ---
 
@@ -104,3 +104,113 @@ Feature. No defect is reported, so no bug ticket is created at intake.
   There is no source to extend, so this is a greenfield build. The
   specification is 15 documents, about 3150 lines, with requirement groups AGT
   through OQ.
+
+## Notes
+
+# Settled record
+
+## Decision, in the operator's terms
+
+1. **The specification is the only input.** The repository the specification's
+   provenance points at is never consulted, at any stage, by this effort or by
+   any effort it spawns. The operator's reason: it contains implementations they
+   do not want carried over.
+2. **The specification must be implementation-agnostic.** It names no
+   programming language, framework, library, wire protocol, transport mechanism,
+   archive or container format, signature algorithm, encoding, byte layout,
+   fixed field width, or operator-facing setting or path spelling. Every choice
+   removed from a requirement is recorded as an open question in
+   `15-open-questions.md`. The rewrite was performed in this pass and reviewed
+   by an independent reviewer with no history of this session.
+3. **The implementation is TypeScript, including addons.** No native shared
+   library, no foreign-function binding, no compiled addon. The plugin contract
+   is an abstract shape that the implementation later realizes in its own
+   language (`OQ-103`, `OQ-104`, `OQ-105`).
+4. **The stack is otherwise decided in this effort**, not in a child effort.
+5. **The agent harness starts on `@earendil-works/pi-durable`** (TypeScript,
+   v1.5.0: durable conversations, tasks, tools, extensions, SQLite or JSONL
+   storage, telemetry). Its fit against `03-agent-runtime.md` is tested by a
+   prototype, not assumed.
+6. **This effort produces decisions, prototypes, and the specification change
+   only.** No production code lands here. Prototypes are throwaway.
+7. **Success is a complete mapping.** The program is done when every normative
+   requirement in `docs/spec/` is owned by a spawned effort and that effort has
+   reached an implemented state whose acceptance criterion passes. "Every
+   requirement implemented by this effort" is explicitly not the test.
+8. **Tickets become efforts.** Each implementation ticket names a child effort
+   and the specification slice it owns. The umbrella ends at `to-spec` and
+   `to-tickets`; it is archived only after every child effort is archived.
+9. **Open questions are decided here, before children start.** Cross-cutting and
+   per-area questions alike, by grilling and prototyping in this effort, so each
+   child builds from a decided slice.
+10. **Build-time proofs are worth investigating.** The specification keeps a
+   general requirement that boundary hand-offs are asserted at build time where
+   the toolchain can prove the property (`HST-043`), and `OQ-112` asks which
+   properties are worth proving and with what.
+
+## Alternatives considered and rejected
+
+- **A native daemon for the plugin ABI.** Rejected: the operator wants one
+  TypeScript implementation, and the specification now leaves the plugin
+  mechanism open.
+- **Keeping the plugin ABI, bundle bytes, and metadata names concrete**, since
+  they are an author-facing contract. Rejected: the operator wants the
+  specification independent of the existing realization.
+- **Relocating the concrete formats into this program's architecture document.**
+  Rejected in favour of dropping them and posing each as an open question.
+- **One effort with many tickets.** Rejected: the ticket count would be large,
+  and the operator wants each slice to get its own full planning and
+  implementation arc.
+- **Core-first scope**, deferring the desktop, Android, and Windows surfaces.
+  Rejected: the success test is the whole specification.
+- **Deciding the spawned-effort granularity now.** Deferred to a planning task,
+  because it depends on the real ticket list.
+
+## Constraints and rationale
+
+- The specification's `[current]` and `[implemented]` markers record the status
+  of the behavior, not the format it was evidenced in. The rewritten text keeps
+  every requirement identifier stable and marks seven retired identifiers where
+  sequences had gaps.
+- `CONTEXT.md` holds no settled terms yet. The specification's own glossary in
+  `02-domain-model.md` is the vocabulary source for the child efforts.
+- The implementation must satisfy `LEG-001`: AGPL-3.0, and a modified version run
+  as a network service must offer its corresponding source.
+- `CMP-007` fixes the platform set: Linux, macOS, Windows desktop, and Android;
+  no iOS.
+- The test signing key must never become a compiled-in trust anchor
+  (`HST-042`), and the compiled-in trust set stays empty (`SEC-006`).
+
+## Consequences for dependent work
+
+- `to-spec` receives a map whose decisions are closed and whose non-goals rule
+  out porting any existing implementation.
+- `to-tickets` must produce tickets whose target is a child effort, not a code
+  change in this effort. The harness has no spawn-effort ticket type, so the
+  ticket body carries the handoff and the changelog records the child effort.
+- Every child effort inherits the non-goal about the provenance repository and
+  the success test about requirement ownership.
+- A requirement-to-effort coverage matrix is needed to prove the success test.
+  It is not yet designed; that is fog for the next pass.
+
+## Remaining fog and newly discovered work
+
+- **Plugin runtime mechanism.** `OQ-103` to `OQ-105` ask what a plugin is and how
+  the host runs it. Under "everything in TypeScript" the realistic candidates
+  are a WebAssembly module instantiated by the daemon, or a module loaded into
+  the daemon's own runtime. Neither has been tested.
+- **pi-durable fit.** `03-agent-runtime.md` requires a consumer-supplied storage
+  interface, exact session reconstruction, lifecycle events, cancellation,
+  execution limits, and extension hooks. pi-durable claims durable sessions,
+  storage backends, tasks, and events. The overlap and the gaps are unmeasured.
+- **Requirement-to-effort coverage.** The success test needs a matrix that maps
+  every normative requirement to exactly one child effort. Its form is undecided.
+- **Child-effort count and boundaries.** Deferred by the operator; depends on the
+  ticket list.
+- **Specification integrity after the rewrite.** An independent reviewer
+  confirmed that no requirement names a language, library, protocol, format,
+  algorithm, layout, or spelling, that every referenced identifier resolves, and
+  that every open question `OQ-103` to `OQ-123` is cited by a numbered
+  requirement. Two blocking findings from its first round (a duplicated
+  `AUT-039`, and a version number left in `OQ-061`) were fixed, and a second
+  review round was not run: that is a known, accepted gap in verification.
